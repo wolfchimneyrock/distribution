@@ -21,10 +21,10 @@ PKG_PATCH_DIRS="${LINUX} mainline ${DEVICE} default"
 
 case ${DEVICE} in
   RK3588)
-    PKG_VERSION="b8e62bed74766b6c8c423a767b35495e78b64caf"
-    PKG_SHA256="0e0fe5a2f108d525a044e190c3f23a4603cdbf8d54bc1cc488d6ee04b9fc5b3a"
+    PKG_VERSION="e97b8a3f30473ea345e0603a1390bb46fa7cc4f2" # 6.1.172, Mali g29p1
+    PKG_SHA256="ca511e0a52ca0a9f1914883ca40b3d02d16e1284e5883882be071288ccdab45f"
     PKG_URL="https://github.com/armbian/linux-rockchip/archive/${PKG_VERSION}.tar.gz"
-    PKG_GIT_CLONE_BRANCH="rk-6.1-rkr3"
+    PKG_GIT_CLONE_BRANCH="rk-6.1-rkr7.2"
     PKG_PATCH_DIRS="${LINUX} ${DEVICE} default"
     ;;
   RK3566|RK3576|S922X)

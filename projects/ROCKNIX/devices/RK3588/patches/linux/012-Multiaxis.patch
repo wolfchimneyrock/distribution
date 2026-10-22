@@ -1,8 +1,8 @@
 diff --git a/drivers/hid/hid-input.c b/drivers/hid/hid-input.c
-index 75a4d8d6bb0f..3a4914e8ef24 100644
+index 7c53a9410..7cfa33a6e 100644
 --- a/drivers/hid/hid-input.c
 +++ b/drivers/hid/hid-input.c
-@@ -1204,8 +1204,13 @@ static void hidinput_configure_usage(struct hid_input *hidinput, struct hid_fiel
+@@ -1418,8 +1418,13 @@ static void hidinput_configure_usage(struct hid_input *hidinput, struct hid_fiel
  			input_set_abs_params(input, usage->code, a, b, (b - a) >> 8, (b - a) >> 4);
  		else	input_set_abs_params(input, usage->code, a, b, 0, 0);
  
@@ -18,7 +18,7 @@ index 75a4d8d6bb0f..3a4914e8ef24 100644
  
  		/* use a larger default input buffer for MT devices */
  		if (usage->code == ABS_MT_POSITION_X && input->hint_events_per_packet == 0)
-@@ -1729,6 +1734,14 @@ static struct hid_input *hidinput_allocate(struct hid_device *hid,
+@@ -2050,6 +2055,14 @@ static struct hid_input *hidinput_allocate(struct hid_device *hid,
  		case HID_GD_WIRELESS_RADIO_CTLS:
  			suffix = "Wireless Radio Control";
  			break;
