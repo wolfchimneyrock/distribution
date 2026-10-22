@@ -1,55 +1,8 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: John Doe <john.doe@somewhere.on.planet>
-Date: Thu, 12 Sep 2024 19:49:22 +0100
-Subject: Add ion allocator
-
-Signed-off-by: John Doe <john.doe@somewhere.on.planet>
----
- MAINTAINERS                                         |  10 +
- drivers/staging/Kconfig                             |   2 +
- drivers/staging/Makefile                            |   1 +
- drivers/staging/android/Kconfig                     |  26 +
- drivers/staging/android/Makefile                    |   6 +
- drivers/staging/android/TODO                        |  13 +
- drivers/staging/android/ashmem.c                    | 970 ++++++++++
- drivers/staging/android/ashmem.h                    |  24 +
- drivers/staging/android/ion/Kconfig                 |  27 +
- drivers/staging/android/ion/Makefile                |   4 +
- drivers/staging/android/ion/ion.c                   | 649 +++++++
- drivers/staging/android/ion/ion.h                   | 302 +++
- drivers/staging/android/ion/ion_cma_heap.c          | 138 ++
- drivers/staging/android/ion/ion_heap.c              | 286 +++
- drivers/staging/android/ion/ion_page_pool.c         | 155 ++
- drivers/staging/android/ion/ion_system_heap.c       | 377 ++++
- drivers/staging/android/uapi/ashmem.h               |  43 +
- drivers/staging/android/uapi/ion.h                  | 127 ++
- include/linux/ion.h                                 | 302 +++
- include/uapi/linux/ion.h                            | 127 ++
- tools/testing/selftests/Makefile                    |   1 +
- tools/testing/selftests/android/Makefile            |  39 +
- tools/testing/selftests/android/config              |   5 +
- tools/testing/selftests/android/ion/.gitignore      |   4 +
- tools/testing/selftests/android/ion/Makefile        |  20 +
- tools/testing/selftests/android/ion/README          | 101 +
- tools/testing/selftests/android/ion/ion.h           | 134 ++
- tools/testing/selftests/android/ion/ion_test.sh     |  58 +
- tools/testing/selftests/android/ion/ionapp_export.c | 127 ++
- tools/testing/selftests/android/ion/ionapp_import.c |  79 +
- tools/testing/selftests/android/ion/ionmap_test.c   | 136 ++
- tools/testing/selftests/android/ion/ionutils.c      | 253 +++
- tools/testing/selftests/android/ion/ionutils.h      |  55 +
- tools/testing/selftests/android/ion/ipcsocket.c     | 227 +++
- tools/testing/selftests/android/ion/ipcsocket.h     |  35 +
- tools/testing/selftests/android/run.sh              |   3 +
- 36 files changed, 4866 insertions(+)
-
 diff --git a/MAINTAINERS b/MAINTAINERS
-index 38213a4527b1..3a09315ac09e 100644
+index 058240ef1..1532b05a0 100644
 --- a/MAINTAINERS
 +++ b/MAINTAINERS
-@@ -1397,10 +1397,20 @@ ANDROID GOLDFISH RTC DRIVER
- M:	Jiaxun Yang <jiaxun.yang@flygoat.com>
- S:	Supported
+@@ -1399,6 +1399,16 @@ S:	Supported
  F:	Documentation/devicetree/bindings/rtc/google,goldfish-rtc.txt
  F:	drivers/rtc/rtc-goldfish.c
  
@@ -66,15 +19,11 @@ index 38213a4527b1..3a09315ac09e 100644
  AOA (Apple Onboard Audio) ALSA DRIVER
  M:	Johannes Berg <johannes@sipsolutions.net>
  L:	linuxppc-dev@lists.ozlabs.org
- L:	alsa-devel@alsa-project.org (moderated for non-subscribers)
- S:	Maintained
 diff --git a/drivers/staging/Kconfig b/drivers/staging/Kconfig
-index 1645e5222ce6..2554a3d3f672 100644
+index e2bc86eac..5843f5259 100644
 --- a/drivers/staging/Kconfig
 +++ b/drivers/staging/Kconfig
-@@ -54,10 +54,12 @@ source "drivers/staging/emxx_udc/Kconfig"
- 
- source "drivers/staging/nvec/Kconfig"
+@@ -54,6 +54,8 @@ source "drivers/staging/nvec/Kconfig"
  
  source "drivers/staging/media/Kconfig"
  
@@ -83,15 +32,11 @@ index 1645e5222ce6..2554a3d3f672 100644
  source "drivers/staging/board/Kconfig"
  
  source "drivers/staging/gdm724x/Kconfig"
- 
- source "drivers/staging/fbtft/Kconfig"
 diff --git a/drivers/staging/Makefile b/drivers/staging/Makefile
-index e32b840b6fd9..05540311394b 100644
+index 89f4b6a0e..69250383e 100644
 --- a/drivers/staging/Makefile
 +++ b/drivers/staging/Makefile
-@@ -16,10 +16,11 @@ obj-$(CONFIG_VT6656)		+= vt6656/
- obj-$(CONFIG_VME_BUS)		+= vme_user/
- obj-$(CONFIG_IIO)		+= iio/
+@@ -17,6 +17,7 @@ obj-$(CONFIG_IIO)		+= iio/
  obj-$(CONFIG_FB_SM750)		+= sm750fb/
  obj-$(CONFIG_USB_EMXX)		+= emxx_udc/
  obj-$(CONFIG_MFD_NVEC)		+= nvec/
@@ -99,11 +44,9 @@ index e32b840b6fd9..05540311394b 100644
  obj-$(CONFIG_STAGING_BOARD)	+= board/
  obj-$(CONFIG_LTE_GDM724X)	+= gdm724x/
  obj-$(CONFIG_FB_TFT)		+= fbtft/
- obj-$(CONFIG_MOST)		+= most/
- obj-$(CONFIG_KS7010)		+= ks7010/
 diff --git a/drivers/staging/android/Kconfig b/drivers/staging/android/Kconfig
 new file mode 100644
-index 000000000000..3f15425456e9
+index 000000000..3f1542545
 --- /dev/null
 +++ b/drivers/staging/android/Kconfig
 @@ -0,0 +1,26 @@
@@ -135,7 +78,7 @@ index 000000000000..3f15425456e9
 +endmenu
 diff --git a/drivers/staging/android/Makefile b/drivers/staging/android/Makefile
 new file mode 100644
-index 000000000000..3b66cd0b0ec5
+index 000000000..3b66cd0b0
 --- /dev/null
 +++ b/drivers/staging/android/Makefile
 @@ -0,0 +1,6 @@
@@ -147,7 +90,7 @@ index 000000000000..3b66cd0b0ec5
 +obj-$(CONFIG_ASHMEM)			+= ashmem.o
 diff --git a/drivers/staging/android/TODO b/drivers/staging/android/TODO
 new file mode 100644
-index 000000000000..80eccfaf6db5
+index 000000000..80eccfaf6
 --- /dev/null
 +++ b/drivers/staging/android/TODO
 @@ -0,0 +1,13 @@
@@ -166,7 +109,7 @@ index 000000000000..80eccfaf6db5
 +Arve Hjønnevåg <arve@android.com> and Riley Andrews <riandrews@android.com>
 diff --git a/drivers/staging/android/ashmem.c b/drivers/staging/android/ashmem.c
 new file mode 100644
-index 000000000000..ddbde3f8430e
+index 000000000..ba1fc11b4
 --- /dev/null
 +++ b/drivers/staging/android/ashmem.c
 @@ -0,0 +1,970 @@
@@ -1142,7 +1085,7 @@ index 000000000000..ddbde3f8430e
 +device_initcall(ashmem_init);
 diff --git a/drivers/staging/android/ashmem.h b/drivers/staging/android/ashmem.h
 new file mode 100644
-index 000000000000..1a478173cd21
+index 000000000..1a478173c
 --- /dev/null
 +++ b/drivers/staging/android/ashmem.h
 @@ -0,0 +1,24 @@
@@ -1172,7 +1115,7 @@ index 000000000000..1a478173cd21
 +#endif	/* _LINUX_ASHMEM_H */
 diff --git a/drivers/staging/android/ion/Kconfig b/drivers/staging/android/ion/Kconfig
 new file mode 100644
-index 000000000000..989fe84a9f9d
+index 000000000..989fe84a9
 --- /dev/null
 +++ b/drivers/staging/android/ion/Kconfig
 @@ -0,0 +1,27 @@
@@ -1205,7 +1148,7 @@ index 000000000000..989fe84a9f9d
 +	  regions, you should say Y here.
 diff --git a/drivers/staging/android/ion/Makefile b/drivers/staging/android/ion/Makefile
 new file mode 100644
-index 000000000000..5f4487b1a224
+index 000000000..5f4487b1a
 --- /dev/null
 +++ b/drivers/staging/android/ion/Makefile
 @@ -0,0 +1,4 @@
@@ -1215,7 +1158,7 @@ index 000000000000..5f4487b1a224
 +obj-$(CONFIG_ION_CMA_HEAP) += ion_cma_heap.o
 diff --git a/drivers/staging/android/ion/ion.c b/drivers/staging/android/ion/ion.c
 new file mode 100644
-index 000000000000..e1fe03ceb7f1
+index 000000000..e1fe03ceb
 --- /dev/null
 +++ b/drivers/staging/android/ion/ion.c
 @@ -0,0 +1,649 @@
@@ -1870,7 +1813,7 @@ index 000000000000..e1fe03ceb7f1
 +subsys_initcall(ion_device_create);
 diff --git a/drivers/staging/android/ion/ion.h b/drivers/staging/android/ion/ion.h
 new file mode 100644
-index 000000000000..c199e88afc6c
+index 000000000..c199e88af
 --- /dev/null
 +++ b/drivers/staging/android/ion/ion.h
 @@ -0,0 +1,302 @@
@@ -2178,7 +2121,7 @@ index 000000000000..c199e88afc6c
 +#endif /* _ION_H */
 diff --git a/drivers/staging/android/ion/ion_cma_heap.c b/drivers/staging/android/ion/ion_cma_heap.c
 new file mode 100644
-index 000000000000..bf65e67ef9d8
+index 000000000..bf65e67ef
 --- /dev/null
 +++ b/drivers/staging/android/ion/ion_cma_heap.c
 @@ -0,0 +1,138 @@
@@ -2322,7 +2265,7 @@ index 000000000000..bf65e67ef9d8
 +device_initcall(ion_add_cma_heaps);
 diff --git a/drivers/staging/android/ion/ion_heap.c b/drivers/staging/android/ion/ion_heap.c
 new file mode 100644
-index 000000000000..ea7e0a244ffc
+index 000000000..7e2887c2e
 --- /dev/null
 +++ b/drivers/staging/android/ion/ion_heap.c
 @@ -0,0 +1,286 @@
@@ -2614,7 +2557,7 @@ index 000000000000..ea7e0a244ffc
 +}
 diff --git a/drivers/staging/android/ion/ion_page_pool.c b/drivers/staging/android/ion/ion_page_pool.c
 new file mode 100644
-index 000000000000..0198b886d906
+index 000000000..0198b886d
 --- /dev/null
 +++ b/drivers/staging/android/ion/ion_page_pool.c
 @@ -0,0 +1,155 @@
@@ -2775,7 +2718,7 @@ index 000000000000..0198b886d906
 +}
 diff --git a/drivers/staging/android/ion/ion_system_heap.c b/drivers/staging/android/ion/ion_system_heap.c
 new file mode 100644
-index 000000000000..eac0632ab4e8
+index 000000000..eac0632ab
 --- /dev/null
 +++ b/drivers/staging/android/ion/ion_system_heap.c
 @@ -0,0 +1,377 @@
@@ -3158,7 +3101,7 @@ index 000000000000..eac0632ab4e8
 +device_initcall(ion_system_contig_heap_create);
 diff --git a/drivers/staging/android/uapi/ashmem.h b/drivers/staging/android/uapi/ashmem.h
 new file mode 100644
-index 000000000000..134efacb3219
+index 000000000..134efacb3
 --- /dev/null
 +++ b/drivers/staging/android/uapi/ashmem.h
 @@ -0,0 +1,43 @@
@@ -3207,7 +3150,7 @@ index 000000000000..134efacb3219
 +#endif	/* _UAPI_LINUX_ASHMEM_H */
 diff --git a/drivers/staging/android/uapi/ion.h b/drivers/staging/android/uapi/ion.h
 new file mode 100644
-index 000000000000..46c93fcb46d6
+index 000000000..46c93fcb4
 --- /dev/null
 +++ b/drivers/staging/android/uapi/ion.h
 @@ -0,0 +1,127 @@
@@ -3340,7 +3283,7 @@ index 000000000000..46c93fcb46d6
 +#endif /* _UAPI_LINUX_ION_H */
 diff --git a/include/linux/ion.h b/include/linux/ion.h
 new file mode 100644
-index 000000000000..c199e88afc6c
+index 000000000..c199e88af
 --- /dev/null
 +++ b/include/linux/ion.h
 @@ -0,0 +1,302 @@
@@ -3648,7 +3591,7 @@ index 000000000000..c199e88afc6c
 +#endif /* _ION_H */
 diff --git a/include/uapi/linux/ion.h b/include/uapi/linux/ion.h
 new file mode 100644
-index 000000000000..46c93fcb46d6
+index 000000000..46c93fcb4
 --- /dev/null
 +++ b/include/uapi/linux/ion.h
 @@ -0,0 +1,127 @@
@@ -3780,10 +3723,10 @@ index 000000000000..46c93fcb46d6
 +
 +#endif /* _UAPI_LINUX_ION_H */
 diff --git a/tools/testing/selftests/Makefile b/tools/testing/selftests/Makefile
-index aae64eb2ae73..ffd3c834a6c9 100644
+index bf34fa443..f75787ef3 100644
 --- a/tools/testing/selftests/Makefile
 +++ b/tools/testing/selftests/Makefile
-@@ -1,8 +1,9 @@
+@@ -1,6 +1,7 @@
  # SPDX-License-Identifier: GPL-2.0
  TARGETS += alsa
  TARGETS += amd-pstate
@@ -3791,11 +3734,9 @@ index aae64eb2ae73..ffd3c834a6c9 100644
  TARGETS += arm64
  TARGETS += bpf
  TARGETS += breakpoints
- TARGETS += capabilities
- TARGETS += cgroup
 diff --git a/tools/testing/selftests/android/Makefile b/tools/testing/selftests/android/Makefile
 new file mode 100644
-index 000000000000..9258306cafe9
+index 000000000..9258306ca
 --- /dev/null
 +++ b/tools/testing/selftests/android/Makefile
 @@ -0,0 +1,39 @@
@@ -3840,7 +3781,7 @@ index 000000000000..9258306cafe9
 +endef
 diff --git a/tools/testing/selftests/android/config b/tools/testing/selftests/android/config
 new file mode 100644
-index 000000000000..b4ad748a9dd9
+index 000000000..b4ad748a9
 --- /dev/null
 +++ b/tools/testing/selftests/android/config
 @@ -0,0 +1,5 @@
@@ -3851,7 +3792,7 @@ index 000000000000..b4ad748a9dd9
 +CONFIG_DRM_VGEM=y
 diff --git a/tools/testing/selftests/android/ion/.gitignore b/tools/testing/selftests/android/ion/.gitignore
 new file mode 100644
-index 000000000000..78eae9972bb1
+index 000000000..78eae9972
 --- /dev/null
 +++ b/tools/testing/selftests/android/ion/.gitignore
 @@ -0,0 +1,4 @@
@@ -3861,7 +3802,7 @@ index 000000000000..78eae9972bb1
 +ionmap_test
 diff --git a/tools/testing/selftests/android/ion/Makefile b/tools/testing/selftests/android/ion/Makefile
 new file mode 100644
-index 000000000000..42b71f005332
+index 000000000..42b71f005
 --- /dev/null
 +++ b/tools/testing/selftests/android/ion/Makefile
 @@ -0,0 +1,20 @@
@@ -3887,7 +3828,7 @@ index 000000000000..42b71f005332
 +$(OUTPUT)/ionmap_test: ionmap_test.c ionutils.c ipcsocket.c
 diff --git a/tools/testing/selftests/android/ion/README b/tools/testing/selftests/android/ion/README
 new file mode 100644
-index 000000000000..21783e9c451e
+index 000000000..21783e9c4
 --- /dev/null
 +++ b/tools/testing/selftests/android/ion/README
 @@ -0,0 +1,101 @@
@@ -3994,7 +3935,7 @@ index 000000000000..21783e9c451e
 +ion_test.sh: done
 diff --git a/tools/testing/selftests/android/ion/ion.h b/tools/testing/selftests/android/ion/ion.h
 new file mode 100644
-index 000000000000..33db23018abf
+index 000000000..33db23018
 --- /dev/null
 +++ b/tools/testing/selftests/android/ion/ion.h
 @@ -0,0 +1,134 @@
@@ -4134,7 +4075,7 @@ index 000000000000..33db23018abf
 +#endif /* _UAPI_LINUX_ION_H */
 diff --git a/tools/testing/selftests/android/ion/ion_test.sh b/tools/testing/selftests/android/ion/ion_test.sh
 new file mode 100755
-index 000000000000..69e676cfc94e
+index 000000000..69e676cfc
 --- /dev/null
 +++ b/tools/testing/selftests/android/ion/ion_test.sh
 @@ -0,0 +1,58 @@
@@ -4198,7 +4139,7 @@ index 000000000000..69e676cfc94e
 +exit $errcode
 diff --git a/tools/testing/selftests/android/ion/ionapp_export.c b/tools/testing/selftests/android/ion/ionapp_export.c
 new file mode 100644
-index 000000000000..063b7830d1bd
+index 000000000..063b7830d
 --- /dev/null
 +++ b/tools/testing/selftests/android/ion/ionapp_export.c
 @@ -0,0 +1,127 @@
@@ -4331,7 +4272,7 @@ index 000000000000..063b7830d1bd
 +}
 diff --git a/tools/testing/selftests/android/ion/ionapp_import.c b/tools/testing/selftests/android/ion/ionapp_import.c
 new file mode 100644
-index 000000000000..54b580cb04f6
+index 000000000..54b580cb0
 --- /dev/null
 +++ b/tools/testing/selftests/android/ion/ionapp_import.c
 @@ -0,0 +1,79 @@
@@ -4416,7 +4357,7 @@ index 000000000000..54b580cb04f6
 +}
 diff --git a/tools/testing/selftests/android/ion/ionmap_test.c b/tools/testing/selftests/android/ion/ionmap_test.c
 new file mode 100644
-index 000000000000..dab36b06b37d
+index 000000000..dab36b06b
 --- /dev/null
 +++ b/tools/testing/selftests/android/ion/ionmap_test.c
 @@ -0,0 +1,136 @@
@@ -4558,7 +4499,7 @@ index 000000000000..dab36b06b37d
 +}
 diff --git a/tools/testing/selftests/android/ion/ionutils.c b/tools/testing/selftests/android/ion/ionutils.c
 new file mode 100644
-index 000000000000..7d1d37c4ef6a
+index 000000000..7d1d37c4e
 --- /dev/null
 +++ b/tools/testing/selftests/android/ion/ionutils.c
 @@ -0,0 +1,253 @@
@@ -4817,7 +4758,7 @@ index 000000000000..7d1d37c4ef6a
 +}
 diff --git a/tools/testing/selftests/android/ion/ionutils.h b/tools/testing/selftests/android/ion/ionutils.h
 new file mode 100644
-index 000000000000..9941eb858576
+index 000000000..9941eb858
 --- /dev/null
 +++ b/tools/testing/selftests/android/ion/ionutils.h
 @@ -0,0 +1,55 @@
@@ -4878,7 +4819,7 @@ index 000000000000..9941eb858576
 +#endif
 diff --git a/tools/testing/selftests/android/ion/ipcsocket.c b/tools/testing/selftests/android/ion/ipcsocket.c
 new file mode 100644
-index 000000000000..7dc521002095
+index 000000000..7dc521002
 --- /dev/null
 +++ b/tools/testing/selftests/android/ion/ipcsocket.c
 @@ -0,0 +1,227 @@
@@ -5111,7 +5052,7 @@ index 000000000000..7dc521002095
 +}
 diff --git a/tools/testing/selftests/android/ion/ipcsocket.h b/tools/testing/selftests/android/ion/ipcsocket.h
 new file mode 100644
-index 000000000000..b3e84498a8a1
+index 000000000..b3e84498a
 --- /dev/null
 +++ b/tools/testing/selftests/android/ion/ipcsocket.h
 @@ -0,0 +1,35 @@
@@ -5152,12 +5093,10 @@ index 000000000000..b3e84498a8a1
 +#endif
 diff --git a/tools/testing/selftests/android/run.sh b/tools/testing/selftests/android/run.sh
 new file mode 100755
-index 000000000000..dd8edf291454
+index 000000000..dd8edf291
 --- /dev/null
 +++ b/tools/testing/selftests/android/run.sh
 @@ -0,0 +1,3 @@
 +#!/bin/sh
 +
 +(cd ion; ./ion_test.sh)
--- 
-Created with Armbian build tools https://github.com/armbian/build

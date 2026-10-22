@@ -1,10 +1,8 @@
 diff --git a/drivers/power/reset/gpio-poweroff.c b/drivers/power/reset/gpio-poweroff.c
-index 1c5af2fef142..3f37897fbeeb 100644
+index 1c5af2fef..3f37897fb 100644
 --- a/drivers/power/reset/gpio-poweroff.c
 +++ b/drivers/power/reset/gpio-poweroff.c
-@@ -22,10 +22,11 @@
-  */
- static struct gpio_desc *reset_gpio;
+@@ -24,6 +24,7 @@ static struct gpio_desc *reset_gpio;
  static u32 timeout = DEFAULT_TIMEOUT_MS;
  static u32 active_delay = 100;
  static u32 inactive_delay = 100;
@@ -12,11 +10,7 @@ index 1c5af2fef142..3f37897fbeeb 100644
  
  static void gpio_poweroff_do_poweroff(void)
  {
- 	BUG_ON(!reset_gpio);
- 
-@@ -41,20 +42,23 @@ static void gpio_poweroff_do_poweroff(void)
- 	gpiod_set_value_cansleep(reset_gpio, 1);
- 
+@@ -43,6 +44,9 @@ static void gpio_poweroff_do_poweroff(void)
  	/* give it some time */
  	mdelay(timeout);
  
@@ -26,9 +20,7 @@ index 1c5af2fef142..3f37897fbeeb 100644
  	WARN_ON(1);
  }
  
- static int gpio_poweroff_probe(struct platform_device *pdev)
- {
- 	bool input = false;
+@@ -52,7 +56,7 @@ static int gpio_poweroff_probe(struct platform_device *pdev)
  	enum gpiod_flags flags;
  
  	/* If a pm_power_off function has already been added, leave it alone */
@@ -37,11 +29,7 @@ index 1c5af2fef142..3f37897fbeeb 100644
  		dev_err(&pdev->dev,
  			"%s: pm_power_off function already registered\n",
  		       __func__);
- 		return -EBUSY;
- 	}
-@@ -72,18 +76,19 @@ static int gpio_poweroff_probe(struct platform_device *pdev)
- 
- 	reset_gpio = devm_gpiod_get(&pdev->dev, NULL, flags);
+@@ -74,6 +78,7 @@ static int gpio_poweroff_probe(struct platform_device *pdev)
  	if (IS_ERR(reset_gpio))
  		return PTR_ERR(reset_gpio);
  
@@ -49,7 +37,7 @@ index 1c5af2fef142..3f37897fbeeb 100644
  	pm_power_off = &gpio_poweroff_do_poweroff;
  	return 0;
  }
- 
+@@ -81,7 +86,7 @@ static int gpio_poweroff_probe(struct platform_device *pdev)
  static int gpio_poweroff_remove(struct platform_device *pdev)
  {
  	if (pm_power_off == &gpio_poweroff_do_poweroff)
@@ -58,5 +46,3 @@ index 1c5af2fef142..3f37897fbeeb 100644
  
  	return 0;
  }
- 
- static const struct of_device_id of_gpio_poweroff_match[] = {

@@ -104,6 +104,17 @@
     <file>rk3588s-retroled-cm5</file>
     <file>rk3588-rock-5b</file>
     <file>rk3588-rock-5b-plus</file>
+    <file>rk3588-rock-5t</file>
+    <file>rk3588-rock-5-itx</file>
+    <file>rk3588s-rock-5a</file>
+    <file>rk3588s-rock-5c</file>
+    <file>rk3588s-orangepi-5</file>
+    <file>rk3588s-orangepi-5b</file>
+    <file>rk3588s-orangepi-5-pro</file>
+    <file>rk3588-orangepi-5-plus</file>
+    <file>rk3588-orangepi-5-max</file>
+    <file>rk3588-orangepi-5-ultra</file>
+    <file>rk3588s-9tripod-linux</file>
   </RK3588>
   <S922X mkimage_options="dtb,extlinux,uboot" fdt_type="fdtdir" dtb_prefix="amlogic">
     <file>meson-g12b-odroid-go-ultra</file>
