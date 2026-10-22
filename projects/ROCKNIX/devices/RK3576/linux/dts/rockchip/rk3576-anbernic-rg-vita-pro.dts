@@ -1082,3 +1082,46 @@
 	pinctrl-0 = <&pwm2m2_ch7>;
 	status = "okay";
 };
+
+/* Keep the GPU rail on: fixes the cold-boot black-screen hang (felixjones, upstream). */
+&vdd_gpu_s0 {
+	regulator-always-on;
+};
+
+/* The Vita Pro keeps the SD card I/O rail up in suspend. */
+&vccio_sd_s0 {
+	regulator-state-mem {
+		/delete-property/ regulator-off-in-suspend;
+		regulator-on-in-suspend;
+	};
+};
+
+/* Board value for the HDMI PHY 0.75 V rail (vendor reference uses 0.8375 V). */
+&vdda0v75_hdmi_s0 {
+	regulator-min-microvolt = <750000>;
+	regulator-max-microvolt = <750000>;
+};
+
+/ {
+	hdmi_sound: hdmi-sound {
+		compatible = "rockchip,hdmi";
+		rockchip,mclk-fs = <128>;
+		rockchip,card-name = "rockchip-hdmi0";
+		rockchip,cpu = <&sai6>;
+		rockchip,codec = <&hdmi>;
+		rockchip,jack-det;
+	};
+
+	dp0_sound: dp0-sound {
+		compatible = "rockchip,hdmi";
+		rockchip,mclk-fs = <512>;
+		rockchip,card-name = "rockchip-dp0";
+		rockchip,cpu = <&spdif_tx3>;
+		rockchip,codec = <&dp0 1>;
+		rockchip,jack-det;
+	};
+};
+
+&spdif_tx3 {
+	status = "okay";
+};
