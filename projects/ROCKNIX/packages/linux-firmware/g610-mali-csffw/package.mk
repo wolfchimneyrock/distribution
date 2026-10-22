@@ -1,18 +1,18 @@
-# SPDX-License-Identifier: GPL-2.0-or-later
-# Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2026-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="g610-mali-csffw"
-PKG_VERSION="e08ced3e0235b25a7ba2a3aeefd0e2fcbd434b68"
-PKG_SHA256="bc5d30e325d45cd7fb76deb57e3e0f1fa027f40a7b71318067798700f3e9a384"
+# CSF firmware that Rockchip ships with kbase g25p0..g29p1 in rockchip-linux/kernel develop-6.1
+# (drivers/gpu/arm/bifrost/mali_csffw.bin, git_sha 8e5cfcfec20cc8aff8509d37e72babc935d34a3b).
+PKG_VERSION="8e5cfcfe"
 PKG_LICENSE="nonfree"
-PKG_SITE="https://github.com/JeffyCN/mirrors"
-PKG_URL="${PKG_SITE}/archive/${PKG_VERSION}.tar.gz"
-PKG_LONGDESC="Mali blob needed for RK3588 gpu"
+PKG_SITE="https://github.com/rockchip-linux/kernel"
+PKG_URL=""
+PKG_LONGDESC="Mali CSF firmware needed for the RK3588 GPU (kbase g29p1)"
 PKG_DEPENDS_TARGET="toolchain"
 PKG_TOOLCHAIN="manual"
 
-#Panfork needs v
 makeinstall_target() {
   mkdir -p ${INSTALL}/$(get_full_firmware_dir)
-    cp -a ${PKG_BUILD}/firmware/g610/mali_csffw.bin ${INSTALL}/$(get_full_firmware_dir)
+  cp -a ${PKG_DIR}/firmware/mali_csffw.bin ${INSTALL}/$(get_full_firmware_dir)
 }
