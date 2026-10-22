@@ -6,3 +6,13 @@ rtl_bt/rtl8821cs_fw.bin
 # Realtek Wi-Fi 6 PCIe cards (RTL8852AE/BE/CE, e.g. Radxa A8 M.2 module) + their USB Bluetooth
 rtw89/rtw8852*
 rtl_bt/rtl8852*
+
+# MediaTek MT7922 (AMD RZ616) PCIe Wi-Fi + USB Bluetooth
+mediatek/WIFI_MT7922_patch_mcu_1_1_hdr.bin
+mediatek/WIFI_RAM_CODE_MT7922_1.bin
+mediatek/BT_RAM_CODE_MT7922_1_1_hdr.bin
+
+# Qualcomm WCN6855 (QCNFA765) PCIe Wi-Fi (ath11k) + USB Bluetooth
+ath11k/WCN6855/*
+qca/rampatch_usb_0013020*.bin
+qca/nvm_usb_0013020*.bin
