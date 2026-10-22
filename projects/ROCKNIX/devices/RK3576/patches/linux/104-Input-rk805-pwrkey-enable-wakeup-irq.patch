@@ -1,0 +1,20 @@
+diff --git a/drivers/input/misc/rk805-pwrkey.c b/drivers/input/misc/rk805-pwrkey.c
+index 592f89f..178a8ff 100644
+--- a/drivers/input/misc/rk805-pwrkey.c
++++ b/drivers/input/misc/rk805-pwrkey.c
+@@ -15,6 +15,7 @@
+ #include <linux/module.h>
+ #include <linux/of.h>
+ #include <linux/platform_device.h>
++#include <linux/pm_wakeirq.h>
+ 
+ static irqreturn_t pwrkey_fall_irq(int irq, void *_pwr)
+ {
+@@ -121,6 +122,7 @@ static int rk805_pwrkey_probe(struct platform_device *pdev)
+ 
+ 	platform_set_drvdata(pdev, pwr);
+ 	device_init_wakeup(&pdev->dev, true);
++	dev_pm_set_wake_irq(&pdev->dev, fall_irq);
+ 
+ 	return 0;
+ }

@@ -11,7 +11,11 @@
 
 #include <linux/delay.h>
 #include <linux/gpio/consumer.h>
+#if __has_include(<linux/hex.h>)
 #include <linux/hex.h>
+#else
+#include <linux/kernel.h>	/* hex2bin() on older (e.g. vendor 6.1) kernels */
+#endif
 #include <linux/media-bus-format.h>
 #include <linux/module.h>
 #include <linux/firmware.h>

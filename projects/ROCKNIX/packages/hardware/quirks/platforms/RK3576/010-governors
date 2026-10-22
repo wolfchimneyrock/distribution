@@ -2,8 +2,12 @@
 # SPDX-License-Identifier: GPL-2.0
 # Copyright (C) 2026 ROCKNIX (https://github.com/ROCKNIX)
 
-cat <<EOF >/storage/.config/profile.d/010-governors
-CPU_FREQ=("/sys/devices/system/cpu/cpufreq/policy0" "/sys/devices/system/cpu/cpufreq/policy4")
-GPU_FREQ=("/sys/devices/platform/soc/27800000.gpu/devfreq/27800000.gpu")
-EOF
+# The GPU sits under /soc on mainline and at the top level on the vendor kernel.
+# Detect it by its platform device, which exists before a GPU driver loads.
+GPU_DEV="/sys/devices/platform/soc/27800000.gpu"
+[ -d "${GPU_DEV}" ] || GPU_DEV="/sys/devices/platform/27800000.gpu"
 
+cat <<EOT >/storage/.config/profile.d/010-governors
+CPU_FREQ=("/sys/devices/system/cpu/cpufreq/policy0" "/sys/devices/system/cpu/cpufreq/policy4")
+GPU_FREQ=("${GPU_DEV}/devfreq/27800000.gpu")
+EOT
