@@ -1,0 +1,12 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
+
+# AP6611S (Synaptics SYN43711) Wi-Fi needs Rockchip's bcmdhd driver, which is
+# blacklisted from autoloading (see modprobe.d/bcmdhd.conf). Firmware comes from
+# ap6611s-firmware in /lib/firmware/brcm/ap6275p (fw_syn43711a0_sdio.bin,
+# nvram_ap6611s.txt), matching CONFIG_BCMDHD_FW_PATH / BCMDHD_NVRAM_PATH.
+
+. /etc/profile
+
+modprobe bcmdhd 2>/dev/null || log $0 "Failed to load bcmdhd for AP6611S Wi-Fi."
