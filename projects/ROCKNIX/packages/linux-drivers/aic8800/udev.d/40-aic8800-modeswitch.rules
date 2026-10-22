@@ -1,0 +1,11 @@
+# AICSemi AIC8800 USB Wi-Fi dongles (e.g. UGREEN CM762 / AX900) first appear as a
+# small USB storage device holding the Windows driver (a69c:572x "Aic MSC").
+# Ejecting it switches the dongle to Wi-Fi mode (e.g. a69c:8d80), which the
+# aic_load_fw driver then picks up.
+ACTION!="add", GOTO="end_aic8800_modeswitch"
+SUBSYSTEM!="usb", GOTO="end_aic8800_modeswitch"
+ENV{DEVTYPE}!="usb_device", GOTO="end_aic8800_modeswitch"
+
+ATTR{idVendor}=="a69c", ATTR{idProduct}=="572[0-9a-f]", RUN+="/usr/sbin/usb_modeswitch -K -v a69c -p $attr{idProduct}"
+
+LABEL="end_aic8800_modeswitch"
