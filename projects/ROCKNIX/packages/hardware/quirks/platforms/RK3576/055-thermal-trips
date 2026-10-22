@@ -2,10 +2,19 @@
 # SPDX-License-Identifier: GPL-2.0
 # Copyright (C) 2023 JELOS (https://github.com/JustEnoughLinuxOS)
 
-# CPU thermal trips
-echo "83000" > /sys/devices/virtual/thermal/thermal_zone1/trip_point_0_temp
-echo "88000" > /sys/devices/virtual/thermal/thermal_zone1/trip_point_1_temp
-
-# GPU thermal trips
-echo "80000" > /sys/devices/virtual/thermal/thermal_zone3/trip_point_0_temp
-echo "88000" > /sys/devices/virtual/thermal/thermal_zone3/trip_point_1_temp
+# Match zones by type: the mainline and vendor kernels number them differently
+# (zone 3 is gpu-thermal on mainline but ddr-thermal on the vendor kernel).
+for zone in /sys/devices/virtual/thermal/thermal_zone*; do
+  case "$(cat ${zone}/type 2>/dev/null)" in
+    bigcore-thermal)
+      # CPU thermal trips
+      echo "83000" > ${zone}/trip_point_0_temp
+      echo "88000" > ${zone}/trip_point_1_temp
+      ;;
+    gpu-thermal)
+      # GPU thermal trips
+      echo "80000" > ${zone}/trip_point_0_temp
+      echo "88000" > ${zone}/trip_point_1_temp
+      ;;
+  esac
+done

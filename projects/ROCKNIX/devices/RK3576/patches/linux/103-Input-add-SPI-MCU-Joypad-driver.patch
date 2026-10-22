@@ -1,0 +1,1193 @@
+diff --git a/drivers/input/joystick/Kconfig b/drivers/input/joystick/Kconfig
+index 04ca3d1..2bb2d75 100644
+--- a/drivers/input/joystick/Kconfig
++++ b/drivers/input/joystick/Kconfig
+@@ -364,6 +364,8 @@ config JOYSTICK_PSXPAD_SPI_FF
+ 
+ 	  To drive rumble motor a dedicated power supply is required.
+ 
++source "drivers/input/joystick/spi-mcu-joypad/Kconfig"
++
+ config JOYSTICK_PXRC
+ 	tristate "PhoenixRC Flight Controller Adapter"
+ 	depends on USB_ARCH_HAS_HCD
+diff --git a/drivers/input/joystick/Makefile b/drivers/input/joystick/Makefile
+index 3937535..aac00c6 100644
+--- a/drivers/input/joystick/Makefile
++++ b/drivers/input/joystick/Makefile
+@@ -26,6 +26,7 @@ obj-$(CONFIG_JOYSTICK_MAGELLAN)		+= magellan.o
+ obj-$(CONFIG_JOYSTICK_MAPLE)		+= maplecontrol.o
+ obj-$(CONFIG_JOYSTICK_N64)		+= n64joy.o
+ obj-$(CONFIG_JOYSTICK_PSXPAD_SPI)	+= psxpad-spi.o
++obj-$(CONFIG_JOYSTICK_SPI_MCU_JOYPAD)	+= spi-mcu-joypad/
+ obj-$(CONFIG_JOYSTICK_PXRC)		+= pxrc.o
+ obj-$(CONFIG_JOYSTICK_QWIIC)		+= qwiic-joystick.o
+ obj-$(CONFIG_JOYSTICK_SENSEHAT)	+= sensehat-joystick.o
+diff --git a/drivers/input/joystick/spi-mcu-joypad/.modules.order.cmd b/drivers/input/joystick/spi-mcu-joypad/.modules.order.cmd
+new file mode 100644
+index 0000000..8569ad5
+--- /dev/null
++++ b/drivers/input/joystick/spi-mcu-joypad/.modules.order.cmd
+@@ -0,0 +1 @@
++cmd_drivers/input/joystick/spi-mcu-joypad/modules.order := {   echo drivers/input/joystick/spi-mcu-joypad/spi-mcu-joypad.ko; :; } > drivers/input/joystick/spi-mcu-joypad/modules.order
+diff --git a/drivers/input/joystick/spi-mcu-joypad/.spi-mcu-joypad.mod.cmd b/drivers/input/joystick/spi-mcu-joypad/.spi-mcu-joypad.mod.cmd
+new file mode 100644
+index 0000000..0c38c59
+--- /dev/null
++++ b/drivers/input/joystick/spi-mcu-joypad/.spi-mcu-joypad.mod.cmd
+@@ -0,0 +1 @@
++cmd_drivers/input/joystick/spi-mcu-joypad/spi-mcu-joypad.mod := printf '%s\n'   spi-mcu-joypad-core.o spi-mcu-joypad-input.o spi-mcu-joypad-leds.o | awk '!x[$$0]++ { print("drivers/input/joystick/spi-mcu-joypad/"$$0) }' > drivers/input/joystick/spi-mcu-joypad/spi-mcu-joypad.mod
+diff --git a/drivers/input/joystick/spi-mcu-joypad/Kconfig b/drivers/input/joystick/spi-mcu-joypad/Kconfig
+new file mode 100644
+index 0000000..0983a3c
+--- /dev/null
++++ b/drivers/input/joystick/spi-mcu-joypad/Kconfig
+@@ -0,0 +1,15 @@
++# SPDX-License-Identifier: GPL-2.0-only
++
++config JOYSTICK_SPI_MCU_JOYPAD
++	tristate "SPI MCU Joypad (Anbernic analog sticks + RGB LEDs)"
++	depends on SPI
++	depends on LEDS_CLASS_MULTICOLOR || LEDS_CLASS_MULTICOLOR=n
++	help
++	  Say Y here if you have an Anbernic handheld with analog sticks
++	  and RGB LEDs controlled by an MCU over SPI.
++
++	  The driver exposes six analog axes via the input subsystem and
++	  two RGB LED rings (one per stick) via the multicolor LED class.
++
++	  To compile this driver as a module, choose M here: the
++	  module will be called spi-mcu-joypad.
+diff --git a/drivers/input/joystick/spi-mcu-joypad/Makefile b/drivers/input/joystick/spi-mcu-joypad/Makefile
+new file mode 100644
+index 0000000..999f2d6
+--- /dev/null
++++ b/drivers/input/joystick/spi-mcu-joypad/Makefile
+@@ -0,0 +1,7 @@
++# SPDX-License-Identifier: GPL-2.0-only
++#
++# Makefile for the SPI MCU Joypad driver
++#
++
++obj-$(CONFIG_JOYSTICK_SPI_MCU_JOYPAD)	+= spi-mcu-joypad.o
++spi-mcu-joypad-y			:= spi-mcu-joypad-core.o spi-mcu-joypad-input.o spi-mcu-joypad-leds.o
+diff --git a/drivers/input/joystick/spi-mcu-joypad/spi-mcu-joypad-core.c b/drivers/input/joystick/spi-mcu-joypad/spi-mcu-joypad-core.c
+new file mode 100644
+index 0000000..a31aed3
+--- /dev/null
++++ b/drivers/input/joystick/spi-mcu-joypad/spi-mcu-joypad-core.c
+@@ -0,0 +1,325 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++/*
++ * SPI MCU Joypad — core driver
++ *
++ * Manages the SPI transport, periodic polling via delayed_work, and
++ * RX parsing.  Delegates input event reporting and LED control to
++ * companion translation units compiled into the same module.
++ *
++ */
++
++#include <linux/gpio/consumer.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/pm.h>
++#include <asm/unaligned.h>
++
++#include "spi-mcu-joypad.h"
++
++/*
++ * The MCU expects this ASCII header at the start of every TX frame.
++ * Derived from tracing the original kernel module's probe sequence.
++ */
++static const u8 mcu_base_cmd[] = { 'Z', ':', 'f', 'f', 0x00, '\r', '\n' };
++
++static void mcu_init_tx(struct mcu_joypad *mjp)
++{
++	memset(mjp->tx_buf, 0, MCU_BUF_LEN);
++	memcpy(mjp->tx_buf, mcu_base_cmd, sizeof(mcu_base_cmd));
++}
++
++/*
++ * Brightness is expected as pre-scaled RGB values by the MCU.
++ */
++static inline u8 scale_component(u8 val, u8 level)
++{
++	return (u8)(((u16)val * (u16)level) / 255u);
++}
++
++/*
++ * CRC-16/XMODEM — polynomial 0x1021, init 0x0000, no reflection/XOR.
++ * The MCU validates this before applying LED commands.
++ */
++static u16 mcu_crc16_xmodem(const u8 *data, size_t len)
++{
++	u16 crc = 0x0000;
++	size_t i;
++	int j;
++
++	for (i = 0; i < len; i++) {
++		crc ^= (u16)data[i] << 8;
++		for (j = 0; j < 8; j++) {
++			if (crc & 0x8000)
++				crc = (crc << 1) ^ 0x1021;
++			else
++				crc <<= 1;
++		}
++	}
++	return crc;
++}
++
++/*
++ * Encode current LED state into tx_buf and stamp the CRC.
++ * Caller must hold tx_lock.
++ * Each ring (left/right stick) is exposed as a single multicolor LED.
++ */
++void mcu_joypad_encode_leds(struct mcu_joypad *mjp)
++{
++	u8 level;
++	u16 crc;
++	int ring, slot;
++
++	mjp->tx_buf[MCU_TX_LED_MODE]   = mjp->led_mode;
++	mjp->tx_buf[MCU_TX_LED_SWITCH] = mjp->led_switch;
++	mjp->tx_buf[MCU_TX_LED_SPEED]  = mjp->led_speed;
++
++	level = mjp->mc_leds[0].led_cdev.brightness;
++	mjp->tx_buf[MCU_TX_LED_LEVEL] = level;
++
++	for (ring = 0; ring < MCU_LED_RINGS; ring++) {
++		struct mc_subled *sub = mjp->mc_leds[ring].subled_info;
++		u8 r = scale_component(sub[0].intensity, level);
++		u8 g = scale_component(sub[1].intensity, level);
++		u8 b = scale_component(sub[2].intensity, level);
++
++		for (slot = 0; slot < MCU_LEDS_PER_RING; slot++) {
++			unsigned int off = MCU_TX_LED_RGB_BASE +
++				((ring * MCU_LEDS_PER_RING + slot) *
++				 MCU_LED_COLORS);
++
++			mjp->tx_buf[off + 0] = r;
++			mjp->tx_buf[off + 1] = g;
++			mjp->tx_buf[off + 2] = b;
++		}
++	}
++
++	/* Stamp sequence counter and CRC-16/XMODEM. */
++	mjp->tx_buf[MCU_TX_LED_SEQ] = mjp->led_seq++;
++	crc = mcu_crc16_xmodem(&mjp->tx_buf[MCU_TX_CRC_START],
++			       MCU_TX_CRC_LEN);
++	mjp->tx_buf[MCU_TX_LED_CRC]     = crc >> 8;
++	mjp->tx_buf[MCU_TX_LED_CRC + 1] = crc & 0xff;
++
++	mjp->led_dirty = false;
++}
++
++/* ---- RX parsing --------------------------------------------------------- */
++
++/*
++ * Validate the MCU reply at rx_buf + MCU_REPLY_OFFSET before
++ * extracting axis values.
++ * 
++ * Axis output order (after the non-linear remapping from the MCU):
++ *   axes[0] = lx, axes[1] = ly, axes[2] = rx,
++ *   axes[3] = ry, axes[4] = lt, axes[5] = rt
++ *
++ * Each value is left-shifted by 3 to expand the MCU's ~13-bit ADC
++ * samples into a 16-bit range.
++ */
++int mcu_parse_rx(const u8 *rx, u16 axes[MCU_NUM_AXES])
++{
++	const u8 *r = rx + MCU_REPLY_OFFSET;
++	u16 sum = 0;
++	u16 raw[6];
++	int i;
++
++	/* MCU header */
++	if (r[0] != 'Z' || r[1] != ':')
++		return -EBADMSG;
++
++	/* Checksum over the 12 payload bytes to validate. */
++	for (i = 2; i <= 13; i++)
++		sum += r[i];
++
++	if ((sum & 0xff) != r[14] || (sum >> 8) != r[15])
++		return -EBADMSG;
++
++	/* Extract 6 little-endian u16 values from the payload. */
++	for (i = 0; i < 6; i++)
++		raw[i] = get_unaligned_le16(&r[2 + i * 2]);
++
++	/*
++	 * Non-linear remapping: the MCU sends raw0/raw1 for the physical
++	 * right stick and raw2/raw3 for the physical left stick, with
++	 * X and Y swapped within each pair.  Left-shift by 3 to expand
++	 * ADC range.
++	 */
++	axes[0] = raw[3] << 3;		/* lx (physical left stick) */
++	axes[1] = raw[2] << 3;		/* ly */
++	axes[2] = raw[1] << 3;		/* rx (physical right stick) */
++	axes[3] = raw[0] << 3;		/* ry */
++	axes[4] = raw[4] << 3;		/* lt */
++	axes[5] = raw[5] << 3;		/* rt */
++
++	return 0;
++}
++
++static void mcu_joypad_poll(struct work_struct *work)
++{
++	struct mcu_joypad *mjp = container_of(work, struct mcu_joypad,
++					      poll_work.work);
++	struct spi_transfer xfer = {
++		.tx_buf = mjp->tx_buf,
++		.rx_buf = mjp->rx_buf,
++		.len    = MCU_BUF_LEN,
++	};
++	u16 axes[MCU_NUM_AXES];
++	int err;
++
++	mutex_lock(&mjp->tx_lock);
++	if (mjp->led_dirty)
++		mcu_joypad_encode_leds(mjp);
++	mutex_unlock(&mjp->tx_lock);
++
++	err = spi_sync_transfer(mjp->spi, &xfer, 1);
++	if (err) {
++		dev_err_ratelimited(mjp->dev, "SPI transfer failed: %d\n", err);
++		goto reschedule;
++	}
++
++	err = mcu_parse_rx(mjp->rx_buf, axes);
++	if (err) {
++		dev_dbg_ratelimited(mjp->dev, "RX parse failed (bad header/checksum)\n");
++		goto reschedule;
++	}
++
++	if (mjp->input_opened)
++		mcu_joypad_input_report(mjp, axes);
++
++reschedule:
++	schedule_delayed_work(&mjp->poll_work,
++			      msecs_to_jiffies(mjp->poll_interval_ms));
++}
++
++static int mcu_joypad_probe(struct spi_device *spi)
++{
++	struct mcu_joypad *mjp;
++	u32 val;
++	int err;
++
++	mjp = devm_kzalloc(&spi->dev, sizeof(*mjp), GFP_KERNEL);
++	if (!mjp)
++		return -ENOMEM;
++
++	mjp->spi = spi;
++	mjp->dev = &spi->dev;
++	spi_set_drvdata(spi, mjp);
++
++	mutex_init(&mjp->tx_lock);
++	INIT_DELAYED_WORK(&mjp->poll_work, mcu_joypad_poll);
++
++	/* Optional enable/power GPIO for the MCU. */
++	mjp->enable_gpio = devm_gpiod_get_optional(&spi->dev, "enable",
++						   GPIOD_OUT_HIGH);
++	if (IS_ERR(mjp->enable_gpio))
++		return dev_err_probe(&spi->dev, PTR_ERR(mjp->enable_gpio),
++				     "failed to get enable GPIO\n");
++	if (mjp->enable_gpio)
++		msleep(20);
++
++	spi->mode = SPI_MODE_0;
++	spi->bits_per_word = 8;
++	err = spi_setup(spi);
++	if (err) {
++		dev_err(&spi->dev, "SPI setup failed: %d\n", err);
++		return err;
++	}
++
++	mjp->poll_interval_ms = MCU_DEFAULT_POLL_MS;
++	if (!device_property_read_u32(&spi->dev, "poll-interval-ms", &val))
++		mjp->poll_interval_ms = val;
++
++	mcu_init_tx(mjp);
++
++	err = mcu_joypad_input_register(mjp);
++	if (err)
++		return err;
++
++	/*
++	 * Auto-calibrate stick centers. This runs MCU_CAL_FRAMES SPI
++	 * transfers with sticks at rest to determine the zero position.
++	 */
++	err = mcu_joypad_calibrate(mjp);
++	if (err)
++		dev_warn(&spi->dev, "auto-calibration failed (%d), using defaults\n", err);
++
++	err = mcu_joypad_leds_register(mjp);
++	if (err)
++		return err;
++
++	schedule_delayed_work(&mjp->poll_work,
++			      msecs_to_jiffies(mjp->poll_interval_ms));
++
++	dev_info(&spi->dev, "MCU joypad ready (poll every %u ms)\n",
++		 mjp->poll_interval_ms);
++	return 0;
++}
++
++static void mcu_joypad_remove(struct spi_device *spi)
++{
++	struct mcu_joypad *mjp = spi_get_drvdata(spi);
++
++	cancel_delayed_work_sync(&mjp->poll_work);
++	mcu_joypad_leds_unregister(mjp);
++}
++
++/* ---- PM ops ------------------------------------------------------------- */
++
++static int mcu_joypad_suspend(struct device *dev)
++{
++	struct spi_device *spi = to_spi_device(dev);
++	struct mcu_joypad *mjp = spi_get_drvdata(spi);
++
++	cancel_delayed_work_sync(&mjp->poll_work);
++	mcu_joypad_leds_suspend(mjp);
++
++	return 0;
++}
++
++static int mcu_joypad_resume(struct device *dev)
++{
++	struct spi_device *spi = to_spi_device(dev);
++	struct mcu_joypad *mjp = spi_get_drvdata(spi);
++
++	mutex_lock(&mjp->tx_lock);
++	mcu_init_tx(mjp);
++	mjp->led_switch = 1;
++	mjp->led_dirty = true;
++	mutex_unlock(&mjp->tx_lock);
++
++	schedule_delayed_work(&mjp->poll_work,
++			      msecs_to_jiffies(mjp->poll_interval_ms));
++
++	return 0;
++}
++
++static DEFINE_SIMPLE_DEV_PM_OPS(mcu_joypad_pm, mcu_joypad_suspend,
++				mcu_joypad_resume);
++
++static const struct of_device_id mcu_joypad_of_match[] = {
++	{ .compatible = "anbernic,spi-mcu-joypad" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, mcu_joypad_of_match);
++
++static const struct spi_device_id mcu_joypad_spi_id[] = {
++	{ "spi-mcu-joypad", 0 },
++	{ }
++};
++MODULE_DEVICE_TABLE(spi, mcu_joypad_spi_id);
++
++static struct spi_driver mcu_joypad_driver = {
++	.driver = {
++		.name		= "spi-mcu-joypad",
++		.of_match_table	= mcu_joypad_of_match,
++		.pm		= pm_sleep_ptr(&mcu_joypad_pm),
++	},
++	.id_table	= mcu_joypad_spi_id,
++	.probe		= mcu_joypad_probe,
++	.remove		= mcu_joypad_remove,
++};
++module_spi_driver(mcu_joypad_driver);
++
++MODULE_AUTHOR("ROCKNIX");
++MODULE_DESCRIPTION("SPI MCU Joypad — analog sticks and RGB LEDs");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/input/joystick/spi-mcu-joypad/spi-mcu-joypad-input.c b/drivers/input/joystick/spi-mcu-joypad/spi-mcu-joypad-input.c
+new file mode 100644
+index 0000000..0d5247e
+--- /dev/null
++++ b/drivers/input/joystick/spi-mcu-joypad/spi-mcu-joypad-input.c
+@@ -0,0 +1,424 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++/*
++ * SPI MCU Joypad — input subsystem
++ *
++ * Registers an input_dev with 6 ABS axes.  Handles:
++ *   - Auto-center calibration at probe (average N frames)
++ *   - Asymmetric per-axis range mapping to signed [-32767..32767]
++ *   - Per-stick radial deadzone with edge rescaling
++ *   - Per-trigger linear deadzone with edge rescaling
++ *   - sysfs attributes for runtime deadzone tuning
++ */
++
++#include <linux/math.h>
++
++#include "spi-mcu-joypad.h"
++
++static s32 calibrate_axis(s32 raw, s32 cal_min, s32 cal_max, s32 cal_zero)
++{
++	s32 result = 0;
++
++	if (raw > cal_zero) {
++		s32 range = cal_max - cal_zero;
++
++		if (range > 0) {
++			result = ((raw - cal_zero) * MCU_AXIS_MAX) / range;
++			result = min_t(s32, result, MCU_AXIS_MAX);
++		}
++	} else if (raw < cal_zero) {
++		s32 range = cal_zero - cal_min;
++
++		if (range > 0) {
++			result = -((cal_zero - raw) * (-MCU_AXIS_MIN)) / range;
++			result = max_t(s32, result, MCU_AXIS_MIN);
++		}
++	}
++
++	return result;
++}
++
++static void apply_radial_deadzone(s32 *px, s32 *py, u32 deadzone)
++{
++	s32 x = *px;
++	s32 y = *py;
++	u64 mag_sq = (s64)x * x + (s64)y * y;
++	u64 dead_sq = (u64)deadzone * deadzone;
++	u32 mag;
++
++	if (deadzone == 0)
++		return;
++
++	if (mag_sq <= dead_sq) {
++		*px = 0;
++		*py = 0;
++		return;
++	}
++
++	/* Rescale: map [deadzone..max_dist] -> [0..max_dist]. */
++	mag = int_sqrt(mag_sq);
++	if (mag > 0) {
++		*px = (s32)((s64)x * (mag - deadzone) / mag);
++		*py = (s32)((s64)y * (mag - deadzone) / mag);
++	}
++}
++
++static s32 apply_linear_deadzone(s32 val, u32 deadzone)
++{
++	s32 sign, abs_val;
++
++	if (deadzone == 0)
++		return val;
++
++	sign = (val >= 0) ? 1 : -1;
++	abs_val = abs(val);
++
++	if (abs_val <= (s32)deadzone)
++		return 0;
++
++	/* Rescale: [deadzone..AXIS_MAX] -> [0..AXIS_MAX]. */
++	return sign * (s32)(((s64)(abs_val - deadzone) * MCU_AXIS_MAX) /
++			    (MCU_AXIS_MAX - (s32)deadzone));
++}
++
++/*
++ * Read MCU_CAL_FRAMES SPI frames and average the raw axis values to
++ * determine the at-rest center for each stick and trigger.
++ */
++
++int mcu_joypad_calibrate(struct mcu_joypad *mjp)
++{
++	struct spi_transfer xfer = {
++		.tx_buf = mjp->tx_buf,
++		.rx_buf = mjp->rx_buf,
++		.len    = MCU_BUF_LEN,
++	};
++	u32 sum[MCU_NUM_AXES] = { };
++	int good_frames = 0;
++	u16 axes[MCU_NUM_AXES];
++	int i, err;
++
++	dev_info(mjp->dev, "auto-calibration: reading %d frames...\n",
++		 MCU_CAL_FRAMES);
++
++	for (i = 0; i < MCU_CAL_FRAMES + 10; i++) {
++		err = spi_sync_transfer(mjp->spi, &xfer, 1);
++		if (err) {
++			dev_dbg(mjp->dev, "cal: SPI error %d on frame %d\n",
++				err, i);
++			msleep(mjp->poll_interval_ms);
++			continue;
++		}
++
++		err = mcu_parse_rx(mjp->rx_buf, axes);
++		if (err) {
++			msleep(mjp->poll_interval_ms);
++			continue;
++		}
++
++		for (int a = 0; a < MCU_NUM_AXES; a++)
++			sum[a] += axes[a];
++		good_frames++;
++
++		if (good_frames >= MCU_CAL_FRAMES)
++			break;
++
++		msleep(mjp->poll_interval_ms);
++	}
++
++	if (good_frames == 0) {
++		dev_err(mjp->dev, "auto-calibration failed: no valid frames\n");
++		return -EIO;
++	}
++
++	/* Left stick */
++	mjp->left_cal.x_zero = sum[0] / good_frames;
++	mjp->left_cal.y_zero = sum[1] / good_frames;
++
++	/* Right stick */
++	mjp->right_cal.x_zero = sum[2] / good_frames;
++	mjp->right_cal.y_zero = sum[3] / good_frames;
++
++	/* Triggers */
++	mjp->trig_l_zero = sum[4] / good_frames;
++	mjp->trig_r_zero = sum[5] / good_frames;
++
++	/*
++	 * Seed min/max for dynamic tracking.  If DT provided a range,
++	 * keep it as the starting point so it gives usable scaling from
++	 * the first frame.  Otherwise seed to the zero point so the
++	 * range grows from nothing as the user exercises the sticks.
++	 */
++	if (!mjp->left_cal.has_dt_range) {
++		mjp->left_cal.x_min = mjp->left_cal.x_zero;
++		mjp->left_cal.x_max = mjp->left_cal.x_zero;
++		mjp->left_cal.y_min = mjp->left_cal.y_zero;
++		mjp->left_cal.y_max = mjp->left_cal.y_zero;
++	}
++	if (!mjp->right_cal.has_dt_range) {
++		mjp->right_cal.x_min = mjp->right_cal.x_zero;
++		mjp->right_cal.x_max = mjp->right_cal.x_zero;
++		mjp->right_cal.y_min = mjp->right_cal.y_zero;
++		mjp->right_cal.y_max = mjp->right_cal.y_zero;
++	}
++
++	mjp->calibrated = true;
++
++	dev_info(mjp->dev,
++		 "auto-calibration complete: L(%d,%d) R(%d,%d) T(%d,%d)\n",
++		 mjp->left_cal.x_zero, mjp->left_cal.y_zero,
++		 mjp->right_cal.x_zero, mjp->right_cal.y_zero,
++		 mjp->trig_l_zero, mjp->trig_r_zero);
++
++	return 0;
++}
++
++/*
++ * Update dynamic min/max tracking for a stick calibration pair.
++ * Called every poll cycle so the scaling range adapts to the actual
++ * physical limits of each stick as the user exercises them.
++ */
++static void update_minmax(struct mcu_stick_cal *cal, s32 x, s32 y)
++{
++	if (x < cal->x_min)
++		cal->x_min = x;
++	if (x > cal->x_max)
++		cal->x_max = x;
++	if (y < cal->y_min)
++		cal->y_min = y;
++	if (y > cal->y_max)
++		cal->y_max = y;
++}
++
++void mcu_joypad_input_report(struct mcu_joypad *mjp, const u16 raw[MCU_NUM_AXES])
++{
++	struct mcu_stick_cal *lc = &mjp->left_cal;
++	struct mcu_stick_cal *rc = &mjp->right_cal;
++	s32 lx, ly, rx, ry, lt, rt;
++
++	/* Track actual physical range so calibration scaling is correct. */
++	update_minmax(lc, (s32)raw[0], (s32)raw[1]);
++	update_minmax(rc, (s32)raw[2], (s32)raw[3]);
++
++	/* Asymmetric calibration: raw -> signed [-32767..32767]. */
++	lx = calibrate_axis(raw[0], lc->x_min, lc->x_max, lc->x_zero);
++	ly = calibrate_axis(raw[1], lc->y_min, lc->y_max, lc->y_zero);
++	rx = calibrate_axis(raw[2], rc->x_min, rc->x_max, rc->x_zero);
++	ry = calibrate_axis(raw[3], rc->y_min, rc->y_max, rc->y_zero);
++	lt = calibrate_axis(raw[4], MCU_RAW_MIN, MCU_RAW_MAX, mjp->trig_l_zero);
++	rt = calibrate_axis(raw[5], MCU_RAW_MIN, MCU_RAW_MAX, mjp->trig_r_zero);
++
++	apply_radial_deadzone(&lx, &ly, mjp->deadzone_left);
++	apply_radial_deadzone(&rx, &ry, mjp->deadzone_right);
++
++	lt = apply_linear_deadzone(lt, mjp->deadzone_triggers);
++	rt = apply_linear_deadzone(rt, mjp->deadzone_triggers);
++
++	input_report_abs(mjp->input, ABS_X,  lx);
++	input_report_abs(mjp->input, ABS_Y,  ly);
++	input_report_abs(mjp->input, ABS_RX, rx);
++	input_report_abs(mjp->input, ABS_RY, ry);
++	input_report_abs(mjp->input, ABS_Z,  lt);
++	input_report_abs(mjp->input, ABS_RZ, rt);
++	input_sync(mjp->input);
++}
++
++static ssize_t deadzone_left_show(struct device *dev,
++				  struct device_attribute *attr, char *buf)
++{
++	struct mcu_joypad *mjp = dev_get_drvdata(dev);
++
++	return sysfs_emit(buf, "%u\n", mjp->deadzone_left);
++}
++
++static ssize_t deadzone_left_store(struct device *dev,
++				   struct device_attribute *attr,
++				   const char *buf, size_t count)
++{
++	struct mcu_joypad *mjp = dev_get_drvdata(dev);
++	u32 val;
++
++	if (kstrtou32(buf, 0, &val))
++		return -EINVAL;
++	if (val > MCU_AXIS_MAX)
++		return -ERANGE;
++
++	mjp->deadzone_left = val;
++	return count;
++}
++static DEVICE_ATTR_RW(deadzone_left);
++
++static ssize_t deadzone_right_show(struct device *dev,
++				   struct device_attribute *attr, char *buf)
++{
++	struct mcu_joypad *mjp = dev_get_drvdata(dev);
++
++	return sysfs_emit(buf, "%u\n", mjp->deadzone_right);
++}
++
++static ssize_t deadzone_right_store(struct device *dev,
++				    struct device_attribute *attr,
++				    const char *buf, size_t count)
++{
++	struct mcu_joypad *mjp = dev_get_drvdata(dev);
++	u32 val;
++
++	if (kstrtou32(buf, 0, &val))
++		return -EINVAL;
++	if (val > MCU_AXIS_MAX)
++		return -ERANGE;
++
++	mjp->deadzone_right = val;
++	return count;
++}
++static DEVICE_ATTR_RW(deadzone_right);
++
++static ssize_t deadzone_triggers_show(struct device *dev,
++				      struct device_attribute *attr, char *buf)
++{
++	struct mcu_joypad *mjp = dev_get_drvdata(dev);
++
++	return sysfs_emit(buf, "%u\n", mjp->deadzone_triggers);
++}
++
++static ssize_t deadzone_triggers_store(struct device *dev,
++				       struct device_attribute *attr,
++				       const char *buf, size_t count)
++{
++	struct mcu_joypad *mjp = dev_get_drvdata(dev);
++	u32 val;
++
++	if (kstrtou32(buf, 0, &val))
++		return -EINVAL;
++	if (val > MCU_AXIS_MAX)
++		return -ERANGE;
++
++	mjp->deadzone_triggers = val;
++	return count;
++}
++static DEVICE_ATTR_RW(deadzone_triggers);
++
++static struct attribute *mcu_joypad_input_attrs[] = {
++	&dev_attr_deadzone_left.attr,
++	&dev_attr_deadzone_right.attr,
++	&dev_attr_deadzone_triggers.attr,
++	NULL,
++};
++
++static const struct attribute_group mcu_joypad_input_attr_group = {
++	.attrs = mcu_joypad_input_attrs,
++};
++
++static int mcu_joypad_input_open(struct input_dev *input)
++{
++	struct mcu_joypad *mjp = input_get_drvdata(input);
++
++	mjp->input_opened = true;
++	return 0;
++}
++
++static void mcu_joypad_input_close(struct input_dev *input)
++{
++	struct mcu_joypad *mjp = input_get_drvdata(input);
++
++	mjp->input_opened = false;
++}
++
++static void mcu_joypad_init_cal_defaults(struct mcu_joypad *mjp)
++{
++	struct device *dev = mjp->dev;
++
++	/*
++	 * Analog stick ranges. If DT provides min/max, use them as the
++	 * initial scaling range (auto-cal still captures the zero point,
++	 * and dynamic tracking will refine further).  Without DT values,
++	 * auto-cal seeds min/max to the zero point so range grows from
++	 * nothing as the user exercises the sticks.
++	 */
++	mjp->left_cal.has_dt_range =
++		!device_property_read_u32(dev, "abs-x-min",
++					 (u32 *)&mjp->left_cal.x_min) |
++		!device_property_read_u32(dev, "abs-x-max",
++					 (u32 *)&mjp->left_cal.x_max) |
++		!device_property_read_u32(dev, "abs-y-min",
++					 (u32 *)&mjp->left_cal.y_min) |
++		!device_property_read_u32(dev, "abs-y-max",
++					 (u32 *)&mjp->left_cal.y_max);
++	if (!mjp->left_cal.has_dt_range) {
++		mjp->left_cal.x_min = MCU_RAW_MIN;
++		mjp->left_cal.x_max = MCU_RAW_MAX;
++		mjp->left_cal.y_min = MCU_RAW_MIN;
++		mjp->left_cal.y_max = MCU_RAW_MAX;
++	}
++
++	mjp->right_cal.has_dt_range =
++		!device_property_read_u32(dev, "abs-rx-min",
++					 (u32 *)&mjp->right_cal.x_min) |
++		!device_property_read_u32(dev, "abs-rx-max",
++					 (u32 *)&mjp->right_cal.x_max) |
++		!device_property_read_u32(dev, "abs-ry-min",
++					 (u32 *)&mjp->right_cal.y_min) |
++		!device_property_read_u32(dev, "abs-ry-max",
++					 (u32 *)&mjp->right_cal.y_max);
++	if (!mjp->right_cal.has_dt_range) {
++		mjp->right_cal.x_min = MCU_RAW_MIN;
++		mjp->right_cal.x_max = MCU_RAW_MAX;
++		mjp->right_cal.y_min = MCU_RAW_MIN;
++		mjp->right_cal.y_max = MCU_RAW_MAX;
++	}
++
++	/* Fallback center at midpoint, auto-cal will overwrite. */
++	mjp->left_cal.x_zero  = (mjp->left_cal.x_min + mjp->left_cal.x_max) / 2;
++	mjp->left_cal.y_zero  = (mjp->left_cal.y_min + mjp->left_cal.y_max) / 2;
++	mjp->right_cal.x_zero = (mjp->right_cal.x_min + mjp->right_cal.x_max) / 2;
++	mjp->right_cal.y_zero = (mjp->right_cal.y_min + mjp->right_cal.y_max) / 2;
++	mjp->trig_l_zero = (MCU_RAW_MIN + MCU_RAW_MAX) / 2;
++	mjp->trig_r_zero = (MCU_RAW_MIN + MCU_RAW_MAX) / 2;
++
++	/* Deadzone defaults, overridable from DT. */
++	mjp->deadzone_left     = MCU_DEADZONE_DEFAULT;
++	mjp->deadzone_right    = MCU_DEADZONE_DEFAULT;
++	mjp->deadzone_triggers = MCU_DEADZONE_DEFAULT;
++	device_property_read_u32(dev, "deadzone-left",     &mjp->deadzone_left);
++	device_property_read_u32(dev, "deadzone-right",    &mjp->deadzone_right);
++	device_property_read_u32(dev, "deadzone-triggers", &mjp->deadzone_triggers);
++}
++
++int mcu_joypad_input_register(struct mcu_joypad *mjp)
++{
++	struct input_dev *input;
++	int err;
++
++	static const unsigned int axis_codes[MCU_NUM_AXES] = {
++		ABS_X, ABS_Y, ABS_RX, ABS_RY, ABS_Z, ABS_RZ,
++	};
++
++	mcu_joypad_init_cal_defaults(mjp);
++
++	input = devm_input_allocate_device(mjp->dev);
++	if (!input)
++		return -ENOMEM;
++
++	mjp->input = input;
++	input_set_drvdata(input, mjp);
++
++	input->name = "MCU Joypad";
++	input->phys = dev_name(mjp->dev);
++	input->id.bustype = BUS_SPI;
++
++	input->open  = mcu_joypad_input_open;
++	input->close = mcu_joypad_input_close;
++
++	for (int i = 0; i < MCU_NUM_AXES; i++)
++		input_set_abs_params(input, axis_codes[i],
++				     MCU_AXIS_MIN, MCU_AXIS_MAX, 0, 0);
++
++	err = input_register_device(input);
++	if (err)
++		return err;
++
++	err = devm_device_add_group(mjp->dev, &mcu_joypad_input_attr_group);
++	if (err)
++		dev_warn(mjp->dev, "failed to create deadzone sysfs: %d\n", err);
++
++	return 0;
++}
+diff --git a/drivers/input/joystick/spi-mcu-joypad/spi-mcu-joypad-leds.c b/drivers/input/joystick/spi-mcu-joypad/spi-mcu-joypad-leds.c
+new file mode 100644
+index 0000000..3e25f38
+--- /dev/null
++++ b/drivers/input/joystick/spi-mcu-joypad/spi-mcu-joypad-leds.c
+@@ -0,0 +1,204 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++/*
++ * SPI MCU Joypad — LED subsystem
++ *
++ * Exposes two multicolor LEDs (one per joystick ring) and sysfs
++ * attributes for MCU-native animation modes (mode, speed, switch).
++ *
++ * LED commands in the TX buffer are only applied by the MCU when
++ * accompanied by a valid CRC-16/XMODEM, see mcu_encode_leds()
++ * in the core module.
++ */
++
++#include "spi-mcu-joypad.h"
++
++static int mcu_led_mc_set(struct led_classdev *cdev,
++			   enum led_brightness brightness)
++{
++	struct mcu_joypad *mjp = dev_get_drvdata(cdev->dev->parent);
++
++	mutex_lock(&mjp->tx_lock);
++	mjp->led_dirty = true;
++	mutex_unlock(&mjp->tx_lock);
++
++	return 0;
++}
++
++static ssize_t led_mode_show(struct device *dev,
++			     struct device_attribute *attr, char *buf)
++{
++	struct mcu_joypad *mjp = dev_get_drvdata(dev);
++
++	return sysfs_emit(buf, "%u\n", mjp->led_mode);
++}
++
++static ssize_t led_mode_store(struct device *dev,
++			      struct device_attribute *attr,
++			      const char *buf, size_t count)
++{
++	struct mcu_joypad *mjp = dev_get_drvdata(dev);
++	u8 val;
++
++	if (kstrtou8(buf, 0, &val))
++		return -EINVAL;
++
++	mutex_lock(&mjp->tx_lock);
++	mjp->led_mode = val;
++	mjp->led_dirty = true;
++	mutex_unlock(&mjp->tx_lock);
++
++	return count;
++}
++static DEVICE_ATTR_RW(led_mode);
++
++static ssize_t led_switch_show(struct device *dev,
++			       struct device_attribute *attr, char *buf)
++{
++	struct mcu_joypad *mjp = dev_get_drvdata(dev);
++
++	return sysfs_emit(buf, "%u\n", mjp->led_switch);
++}
++
++static ssize_t led_switch_store(struct device *dev,
++				struct device_attribute *attr,
++				const char *buf, size_t count)
++{
++	struct mcu_joypad *mjp = dev_get_drvdata(dev);
++	u8 val;
++
++	if (kstrtou8(buf, 0, &val))
++		return -EINVAL;
++	if (val > 1)
++		return -EINVAL;
++
++	mutex_lock(&mjp->tx_lock);
++	mjp->led_switch = val;
++	mjp->led_dirty = true;
++	mutex_unlock(&mjp->tx_lock);
++
++	return count;
++}
++static DEVICE_ATTR_RW(led_switch);
++
++static ssize_t led_speed_show(struct device *dev,
++			      struct device_attribute *attr, char *buf)
++{
++	struct mcu_joypad *mjp = dev_get_drvdata(dev);
++
++	return sysfs_emit(buf, "%u\n", mjp->led_speed);
++}
++
++static ssize_t led_speed_store(struct device *dev,
++			       struct device_attribute *attr,
++			       const char *buf, size_t count)
++{
++	struct mcu_joypad *mjp = dev_get_drvdata(dev);
++	u8 val;
++
++	if (kstrtou8(buf, 0, &val))
++		return -EINVAL;
++
++	mutex_lock(&mjp->tx_lock);
++	mjp->led_speed = val;
++	mjp->led_dirty = true;
++	mutex_unlock(&mjp->tx_lock);
++
++	return count;
++}
++static DEVICE_ATTR_RW(led_speed);
++
++static struct attribute *mcu_joypad_led_attrs[] = {
++	&dev_attr_led_mode.attr,
++	&dev_attr_led_switch.attr,
++	&dev_attr_led_speed.attr,
++	NULL,
++};
++
++static const struct attribute_group mcu_joypad_led_attr_group = {
++	.attrs = mcu_joypad_led_attrs,
++};
++
++/* ---- Registration / teardown -------------------------------------------- */
++
++static const char * const ring_names[MCU_LED_RINGS] = {
++	"left",
++	"right",
++};
++
++int mcu_joypad_leds_register(struct mcu_joypad *mjp)
++{
++	int i, j, err;
++
++	mjp->led_mode   = 1; /* Solid  */
++	mjp->led_switch = 1; /* On     */
++	mjp->led_speed  = 0; /* Static */
++
++	for (i = 0; i < MCU_LED_RINGS; i++) {
++		struct led_classdev_mc *mc = &mjp->mc_leds[i];
++		struct led_classdev *cdev = &mc->led_cdev;
++
++		for (j = 0; j < MCU_LED_COLORS; j++) {
++			mjp->subled_info[i][j].color_index =
++				(j == 0) ? LED_COLOR_ID_RED :
++				(j == 1) ? LED_COLOR_ID_GREEN :
++					   LED_COLOR_ID_BLUE;
++			mjp->subled_info[i][j].intensity = 0;
++			mjp->subled_info[i][j].channel = j;
++		}
++
++		mc->subled_info = mjp->subled_info[i];
++		mc->num_colors = MCU_LED_COLORS;
++
++		cdev->name = devm_kasprintf(mjp->dev, GFP_KERNEL,
++					    "%s::joystick-%s",
++					    dev_name(mjp->dev),
++					    ring_names[i]);
++		if (!cdev->name)
++			return -ENOMEM;
++
++		cdev->brightness = 128;
++		cdev->max_brightness = 255;
++		cdev->brightness_set_blocking = mcu_led_mc_set;
++
++		err = devm_led_classdev_multicolor_register(mjp->dev, mc);
++		if (err) {
++			dev_err(mjp->dev,
++				"failed to register %s LED: %d\n",
++				ring_names[i], err);
++			return err;
++		}
++	}
++
++	err = devm_device_add_group(mjp->dev, &mcu_joypad_led_attr_group);
++	if (err)
++		dev_warn(mjp->dev, "failed to create LED sysfs: %d\n", err);
++
++	/* Push initial state on next poll. */
++	mutex_lock(&mjp->tx_lock);
++	mjp->led_dirty = true;
++	mutex_unlock(&mjp->tx_lock);
++
++	return 0;
++}
++
++void mcu_joypad_leds_unregister(struct mcu_joypad *mjp)
++{
++	/* Nothing to do. */
++}
++
++void mcu_joypad_leds_suspend(struct mcu_joypad *mjp)
++{
++	struct spi_transfer xfer = {
++		.tx_buf = mjp->tx_buf,
++		.rx_buf = mjp->rx_buf,
++		.len    = MCU_BUF_LEN,
++	};
++
++	mutex_lock(&mjp->tx_lock);
++	mjp->led_switch = 0;
++	mjp->led_dirty = true;
++	mcu_joypad_encode_leds(mjp);
++	mutex_unlock(&mjp->tx_lock);
++
++	spi_sync_transfer(mjp->spi, &xfer, 1);
++}
+diff --git a/drivers/input/joystick/spi-mcu-joypad/spi-mcu-joypad.h b/drivers/input/joystick/spi-mcu-joypad/spi-mcu-joypad.h
+new file mode 100644
+index 0000000..ecf1111
+--- /dev/null
++++ b/drivers/input/joystick/spi-mcu-joypad/spi-mcu-joypad.h
+@@ -0,0 +1,143 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++/*
++ * SPI MCU Joypad driver
++ *
++ * Analog joystick + RGB LED controller behind an SPI-connected MCU.
++ * A single 64-byte full-duplex transfer carries joystick state (RX)
++ * and LED configuration (TX) simultaneously.
++ */
++
++#ifndef _SPI_MCU_JOYPAD_H
++#define _SPI_MCU_JOYPAD_H
++
++#include <linux/delay.h>
++#include <linux/input.h>
++#include <linux/led-class-multicolor.h>
++#include <linux/mutex.h>
++#include <linux/spi/spi.h>
++#include <linux/workqueue.h>
++
++/* Protocol constants derived from MCU communication analysis. */
++#define MCU_BUF_LEN		0x40	/* 64-byte SPI transfer */
++#define MCU_REPLY_OFFSET	0x20	/* RX offset where "Z:" reply starts */
++#define MCU_REPLY_LEN		0x10	/* 16-byte reply window */
++#define MCU_PAYLOAD_BYTES	12		/* 6 x le16 axis values */
++
++/* TX buffer offsets for LED control bytes. */
++#define MCU_TX_LED_MODE		0x07
++#define MCU_TX_LED_SWITCH		0x08
++#define MCU_TX_LED_LEVEL		0x09
++#define MCU_TX_LED_SPEED		0x0A
++#define MCU_TX_LED_RGB_BASE	0x0B	/* First RGB triplet */
++#define MCU_TX_LED_SEQ			0x3C	/* Sequence counter (in CRC range) */
++#define MCU_TX_LED_CRC			0x3D	/* CRC-16/XMODEM, 2 bytes big-endian */
++
++/* CRC-16/XMODEM covers tx[0x07..0x3C] inclusive (54 bytes). */
++#define MCU_TX_CRC_START	0x07
++#define MCU_TX_CRC_LEN		54
++
++/*
++ * 16 TX RGB triplet slots: 8 per joystick ring.
++ * Slots 0-7 = left stick, slots 8-15 = right stick.
++ */
++#define MCU_LED_TX_SLOTS	16	/* Total TX triplet slots */
++#define MCU_LED_COLORS		3	/* R, G, B per slot */
++#define MCU_LEDS_PER_RING	8	/* Physical LEDs per stick */
++#define MCU_LED_RINGS		2	/* Left + right stick */
++
++/* Number of analog axes reported by the MCU. */
++#define MCU_NUM_AXES		6
++
++/* Default polling interval in ms (~200 Hz). */
++#define MCU_DEFAULT_POLL_MS	5
++
++/*
++ * Calibrated signed output range, centered at 0.
++ */
++#define MCU_AXIS_MIN		(-32767)
++#define MCU_AXIS_MAX		32767
++
++/*
++ * Raw axis range after the MCU's << 3 expansion.
++ * ~13-bit ADC shifted left 3 gives 0–65528 in practice; we use 0–65535
++ * as the default min/max since the calibration will handle the actual
++ * center offset.
++ */
++#define MCU_RAW_MIN		0
++#define MCU_RAW_MAX		65535
++
++/* Auto-calibration: number of SPI frames averaged to find stick center. */
++#define MCU_CAL_FRAMES		50
++
++/* Default radial deadzone (in calibrated axis units, 0–32767 scale). */
++#define MCU_DEADZONE_DEFAULT	3000
++
++/*
++ * Per-stick calibration data.
++ * x/y_zero is auto-calibrated at probe; min/max come from DT or defaults.
++ */
++struct mcu_stick_cal {
++	s32	x_min, x_max, x_zero;
++	s32	y_min, y_max, y_zero;
++	bool	has_dt_range;
++};
++
++struct mcu_joypad {
++	struct spi_device	*spi;
++	struct device		*dev;
++
++	/* Optional MCU power/enable GPIO. */
++	struct gpio_desc	*enable_gpio;
++
++	/* SPI transaction buffers. */
++	u8	tx_buf[MCU_BUF_LEN] ____cacheline_aligned;
++	u8	rx_buf[MCU_BUF_LEN] ____cacheline_aligned;
++
++	/*
++	 * Protects tx_buf from concurrent writes (LED brightness_set vs poll).
++	 * spi_sync sleeps, so a mutex is correct here.
++	 */
++	struct mutex		tx_lock;
++
++	/* Core polling that runs independently of input open/close. */
++	struct delayed_work	poll_work;
++	unsigned int		poll_interval_ms;
++
++	/* Input subsystem state. */
++	struct input_dev	*input;
++	bool			input_opened;
++
++	/* Stick calibration with center auto-detection, range from DT. */
++	struct mcu_stick_cal	left_cal;
++	struct mcu_stick_cal	right_cal;
++	s32			trig_l_zero;
++	s32			trig_r_zero;
++	bool			calibrated;
++
++	/* Radial deadzone per stick pair and linear deadzone for triggers. */
++	u32			deadzone_left;
++	u32			deadzone_right;
++	u32			deadzone_triggers;
++
++	/* LED subsystem state — two rings (left/right stick). */
++	struct led_classdev_mc	mc_leds[MCU_LED_RINGS];
++	struct mc_subled	subled_info[MCU_LED_RINGS][MCU_LED_COLORS];
++	u8			led_mode;
++	u8			led_switch;
++	u8			led_speed;
++	u8			led_seq;	/* TX sequence counter */
++	bool			led_dirty;
++};
++
++int mcu_parse_rx(const u8 *rx, u16 axes[MCU_NUM_AXES]);
++void mcu_joypad_encode_leds(struct mcu_joypad *mjp);
++
++int mcu_joypad_input_register(struct mcu_joypad *mjp);
++void mcu_joypad_input_report(struct mcu_joypad *mjp, const u16 raw[MCU_NUM_AXES]);
++int mcu_joypad_calibrate(struct mcu_joypad *mjp);
++
++int mcu_joypad_leds_register(struct mcu_joypad *mjp);
++void mcu_joypad_leds_unregister(struct mcu_joypad *mjp);
++void mcu_joypad_leds_suspend(struct mcu_joypad *mjp);
++
++#endif /* _SPI_MCU_JOYPAD_H */

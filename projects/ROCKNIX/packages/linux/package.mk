@@ -27,7 +27,16 @@ case ${DEVICE} in
     PKG_GIT_CLONE_BRANCH="rk-6.1-rkr3"
     PKG_PATCH_DIRS="${LINUX} ${DEVICE} default"
     ;;
-  RK3566|RK3576|S922X)
+  RK3576)
+    # Rockchip vendor (BSP) kernel from Armbian, for the GPU PVTPLL clock and
+    # the in-tree Mali kbase (JM, g29p1) used by libmali; see devices/RK3576.
+    PKG_VERSION="e97b8a3f30473ea345e0603a1390bb46fa7cc4f2" # 6.1.172, rk-6.1-rkr7.2
+    PKG_SHA256="ca511e0a52ca0a9f1914883ca40b3d02d16e1284e5883882be071288ccdab45f"
+    PKG_URL="https://github.com/armbian/linux-rockchip/archive/${PKG_VERSION}.tar.gz"
+    PKG_GIT_CLONE_BRANCH="rk-6.1-rkr7.2"
+    PKG_PATCH_DIRS="${LINUX} ${DEVICE} default"
+    ;;
+  RK3566|S922X)
     PKG_VERSION="7.2.11"
     PKG_SHA256="fd0fc479f983a8c05313f13e9c36330fe6651cf725396748c40d5cd93fa1e6a4"
     PKG_URL="https://www.kernel.org/pub/linux/kernel/v${PKG_VERSION/.*/}.x/${PKG_NAME}-${PKG_VERSION}.tar.xz"
