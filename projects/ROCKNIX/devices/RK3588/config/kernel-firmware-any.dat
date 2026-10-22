@@ -1,0 +1,8 @@
+# Realtek RTL8821CS SDIO Wi-Fi + Bluetooth (Indiedroid Nova)
+rtw88/rtw8821c_fw.bin
+rtl_bt/rtl8821cs_config.bin
+rtl_bt/rtl8821cs_fw.bin
+
+# Realtek Wi-Fi 6 PCIe cards (RTL8852AE/BE/CE, e.g. Radxa A8 M.2 module) + their USB Bluetooth
+rtw89/rtw8852*
+rtl_bt/rtl8852*
