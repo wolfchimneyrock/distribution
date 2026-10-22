@@ -1,0 +1,45 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
+
+# Indiedroid Nova: the RTL8821CS (SDIO) fails its first probe on most boots
+# (SDIO -110 timeouts during the firmware download); probing again succeeds.
+# Same fix as platforms/H700/040-wifi_probe_retry, with a module reload as a
+# fallback if binding the device again is not enough.
+
+. /etc/profile
+
+unbound_8821cs() {
+  local dev
+  for dev in /sys/bus/sdio/devices/*
+  do
+    [ -e "${dev}/driver" ] && continue
+    case "$(cat "${dev}/modalias" 2>/dev/null)" in
+      sdio:*v024CdC821*) basename "${dev}" ;;
+    esac
+  done
+}
+
+wifi_probe_retry() {
+  local try dev
+  for try in 1 2 3 4 5
+  do
+    sleep 10
+    devs="$(unbound_8821cs)"
+    [ -z "${devs}" ] && return 0
+    if [ "${try}" -le 3 ]; then
+      for dev in ${devs}
+      do
+        log $0 "RTL8821CS did not probe, binding rtw88_8821cs to ${dev} (try ${try})."
+        echo "${dev}" > /sys/bus/sdio/drivers/rtw88_8821cs/bind 2>/dev/null
+      done
+    else
+      log $0 "RTL8821CS still unbound, reloading the rtw88 modules (try ${try})."
+      modprobe -r rtw88_8821cs rtw88_8821c rtw88_sdio rtw88_core 2>/dev/null
+      sleep 1
+      modprobe rtw88_8821cs
+    fi
+  done
+}
+
+wifi_probe_retry &
