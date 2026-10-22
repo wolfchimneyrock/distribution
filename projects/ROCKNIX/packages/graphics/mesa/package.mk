@@ -15,7 +15,7 @@ PKG_PATCH_DIRS+=" ${DEVICE}"
 
 get_graphicdrivers
 
-if listcontains "${GRAPHIC_DRIVERS}" "panfrost"; then
+if listcontains "${GRAPHIC_DRIVERS}" "(imagination|panfrost)"; then
   PKG_DEPENDS_TARGET+=" mesa:host"
 fi
 
@@ -49,7 +49,13 @@ PKG_MESON_OPTS_TARGET="-Dc_link_args=-lgcc \
                        -Dbuild-tests=false \
                        -Dmicrosoft-clc=disabled"
 
-if listcontains "${GRAPHIC_DRIVERS}" "panfrost"; then
+# PowerVR needs the pco_clc host tool from mesa:host.
+if listcontains "${GRAPHIC_DRIVERS}" "imagination"; then
+  PKG_MESON_OPTS_HOST="${PKG_MESON_OPTS_HOST/-Dtools=panfrost/-Dtools=panfrost,imagination}"
+  PKG_DEPENDS_TARGET+=" spirv-tools"
+fi
+
+if listcontains "${GRAPHIC_DRIVERS}" "(imagination|panfrost)"; then
   # These options require that we have built mesa host as specified above
   PKG_MESON_OPTS_TARGET+=" -Dmesa-clc=system \
                            -Dprecomp-compiler=system"

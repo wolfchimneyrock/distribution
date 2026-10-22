@@ -1,0 +1,37 @@
+From e3177c0e473803a7b53079838d88e1fef57338c3 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Thu, 3 Sep 2026 22:21:39 +0200
+Subject: [PATCH 084/211] dt-bindings: mmc: sunxi: the A733 controller is the
+ A523 one
+
+The A733 MMC controllers are the same generation as the A523's, with the
+clock phases of the new timing mode, so they fall back to that compatible
+rather than the D1's.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ .../devicetree/bindings/mmc/allwinner,sun4i-a10-mmc.yaml   | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/devicetree/bindings/mmc/allwinner,sun4i-a10-mmc.yaml b/Documentation/devicetree/bindings/mmc/allwinner,sun4i-a10-mmc.yaml
+index 9e9610bb1ed..13b616ecb65 100644
+--- a/Documentation/devicetree/bindings/mmc/allwinner,sun4i-a10-mmc.yaml
++++ b/Documentation/devicetree/bindings/mmc/allwinner,sun4i-a10-mmc.yaml
+@@ -56,10 +56,11 @@ properties:
+           - const: allwinner,sun50i-h616-mmc
+           - const: allwinner,sun50i-a100-mmc
+       - items:
+-          - enum:
+-              - allwinner,sun55i-a523-mmc
+-              - allwinner,sun60i-a733-mmc
++          - const: allwinner,sun55i-a523-mmc
+           - const: allwinner,sun20i-d1-mmc
++      - items:
++          - const: allwinner,sun60i-a733-mmc
++          - const: allwinner,sun55i-a523-mmc
+ 
+   reg:
+     maxItems: 1
+-- 
+2.30.2
+

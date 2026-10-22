@@ -1,0 +1,30 @@
+From 38f00cdcfdd19459f24f245a03abddbac8d94304 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Fri, 4 Sep 2026 11:43:35 +0200
+Subject: [PATCH 086/211] dt-bindings: thermal: sun8i-ths: add the Allwinner
+ A733
+
+The A733 controller follows the H6 register layout and takes a bus clock
+and a reset like the SoCs after it, plus a second clock which feeds the
+conversions and comes from the GPADC.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ .../devicetree/bindings/thermal/allwinner,sun8i-a83t-ths.yaml    | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Documentation/devicetree/bindings/thermal/allwinner,sun8i-a83t-ths.yaml b/Documentation/devicetree/bindings/thermal/allwinner,sun8i-a83t-ths.yaml
+index 3e61689f6dd..5cb50087a8c 100644
+--- a/Documentation/devicetree/bindings/thermal/allwinner,sun8i-a83t-ths.yaml
++++ b/Documentation/devicetree/bindings/thermal/allwinner,sun8i-a83t-ths.yaml
+@@ -24,6 +24,7 @@ properties:
+       - allwinner,sun50i-h5-ths
+       - allwinner,sun50i-h6-ths
+       - allwinner,sun50i-h616-ths
++      - allwinner,sun60i-a733-ths
+ 
+   clocks:
+     minItems: 1
+-- 
+2.30.2
+

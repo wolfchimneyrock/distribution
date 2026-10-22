@@ -1,0 +1,64 @@
+From 30dcee97e1360709fc8deee8e5885e2f3b0546d2 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Sun, 15 Mar 2026 11:15:14 +0100
+Subject: [PATCH 120/211] drm/sun4i: mixer: Simplify initialization
+
+Deasserting the mixer reset already clears all unit enable bits. Remove
+the redundant initialization loop that writes zero to each unit.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ drivers/gpu/drm/sun4i/sun8i_mixer.c | 30 +----------------------------
+ 1 file changed, 1 insertion(+), 29 deletions(-)
+
+diff --git a/drivers/gpu/drm/sun4i/sun8i_mixer.c b/drivers/gpu/drm/sun4i/sun8i_mixer.c
+index 6682bf3fafc..0812f7542c8 100644
+--- a/drivers/gpu/drm/sun4i/sun8i_mixer.c
++++ b/drivers/gpu/drm/sun4i/sun8i_mixer.c
+@@ -533,7 +533,7 @@ static int sun8i_mixer_bind(struct device *dev, struct device *master,
+ 	struct sun4i_drv *drv = drm->dev_private;
+ 	struct sun8i_mixer *mixer;
+ 	void __iomem *regs;
+-	int i, ret;
++	int ret;
+ 
+ 	/*
+ 	 * The mixer uses single 32-bit register to store memory
+@@ -686,34 +686,6 @@ static int sun8i_mixer_bind(struct device *dev, struct device *master,
+ 
+ 	list_add_tail(&mixer->engine.list, &drv->engine_list);
+ 
+-	/* Reset registers and disable unused sub-engines */
+-	if (mixer->cfg->de_type == SUN8I_MIXER_DE3) {
+-		for (i = 0; i < DE3_MIXER_UNIT_SIZE; i += 4)
+-			regmap_write(mixer->engine.regs, i, 0);
+-
+-		regmap_write(mixer->engine.regs, SUN50I_MIXER_FCE_EN, 0);
+-		regmap_write(mixer->engine.regs, SUN50I_MIXER_PEAK_EN, 0);
+-		regmap_write(mixer->engine.regs, SUN50I_MIXER_LCTI_EN, 0);
+-		regmap_write(mixer->engine.regs, SUN50I_MIXER_BLS_EN, 0);
+-		regmap_write(mixer->engine.regs, SUN50I_MIXER_FCC_EN, 0);
+-		regmap_write(mixer->engine.regs, SUN50I_MIXER_DNS_EN, 0);
+-		regmap_write(mixer->engine.regs, SUN50I_MIXER_DRC_EN, 0);
+-		regmap_write(mixer->engine.regs, SUN50I_MIXER_FMT_EN, 0);
+-		regmap_write(mixer->engine.regs, SUN50I_MIXER_CDC0_EN, 0);
+-		regmap_write(mixer->engine.regs, SUN50I_MIXER_CDC1_EN, 0);
+-	} else if (mixer->cfg->de_type == SUN8I_MIXER_DE2) {
+-		for (i = 0; i < DE2_MIXER_UNIT_SIZE; i += 4)
+-			regmap_write(mixer->engine.regs, i, 0);
+-
+-		regmap_write(mixer->engine.regs, SUN8I_MIXER_FCE_EN, 0);
+-		regmap_write(mixer->engine.regs, SUN8I_MIXER_BWS_EN, 0);
+-		regmap_write(mixer->engine.regs, SUN8I_MIXER_LTI_EN, 0);
+-		regmap_write(mixer->engine.regs, SUN8I_MIXER_PEAK_EN, 0);
+-		regmap_write(mixer->engine.regs, SUN8I_MIXER_ASE_EN, 0);
+-		regmap_write(mixer->engine.regs, SUN8I_MIXER_FCC_EN, 0);
+-		regmap_write(mixer->engine.regs, SUN8I_MIXER_DCSC_EN, 0);
+-	}
+-
+ 	sun8i_mixer_init(mixer);
+ 
+ 	return 0;
+-- 
+2.30.2
+

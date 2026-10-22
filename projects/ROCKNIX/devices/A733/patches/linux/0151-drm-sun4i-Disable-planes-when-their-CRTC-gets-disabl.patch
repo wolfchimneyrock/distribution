@@ -1,0 +1,103 @@
+From 456c5df6b0f15639e38fe6d74c61cc5e497d8c23 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Mon, 20 Jul 2026 07:20:54 +0200
+Subject: [PATCH 151/211] drm/sun4i: Disable planes when their CRTC gets
+ disabled
+
+Plane updates are committed with the active-only flag, so planes on a
+CRTC that is being disabled are never committed. The engine then keeps
+scanning out stale buffer addresses once the CRTC is enabled again,
+reading freed buffers through the IOMMU.
+
+Give the planes real atomic_disable callbacks and run them from the
+CRTC atomic_disable hook.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ drivers/gpu/drm/sun4i/sun4i_crtc.c     | 9 +++++++++
+ drivers/gpu/drm/sun4i/sun8i_ui_layer.c | 9 +++++++++
+ drivers/gpu/drm/sun4i/sun8i_vi_layer.c | 9 +++++++++
+ 3 files changed, 27 insertions(+)
+
+diff --git a/drivers/gpu/drm/sun4i/sun4i_crtc.c b/drivers/gpu/drm/sun4i/sun4i_crtc.c
+index 921bf4edebe..c667dfc5929 100644
+--- a/drivers/gpu/drm/sun4i/sun4i_crtc.c
++++ b/drivers/gpu/drm/sun4i/sun4i_crtc.c
+@@ -131,11 +131,20 @@ static void sun4i_crtc_atomic_flush(struct drm_crtc *crtc,
+ static void sun4i_crtc_atomic_disable(struct drm_crtc *crtc,
+ 				      struct drm_atomic_commit *state)
+ {
++	struct drm_crtc_state *old_state = drm_atomic_get_old_crtc_state(state,
++									 crtc);
+ 	struct drm_encoder *encoder = sun4i_crtc_get_encoder(crtc);
+ 	struct sun4i_crtc *scrtc = drm_crtc_to_sun4i_crtc(crtc);
+ 
+ 	DRM_DEBUG_DRIVER("Disabling the CRTC\n");
+ 
++	/*
++	 * Planes are only committed on active CRTCs, so they must be
++	 * disabled here. Otherwise the engine would keep scanning out
++	 * stale buffer addresses when the CRTC is enabled again.
++	 */
++	drm_atomic_helper_disable_planes_on_crtc(old_state, false);
++
+ 	drm_crtc_vblank_off(crtc);
+ 
+ 	sun4i_tcon_set_status(scrtc->tcon, encoder, false);
+diff --git a/drivers/gpu/drm/sun4i/sun8i_ui_layer.c b/drivers/gpu/drm/sun4i/sun8i_ui_layer.c
+index a0e5e0087a9..5491e9e7b56 100644
+--- a/drivers/gpu/drm/sun4i/sun8i_ui_layer.c
++++ b/drivers/gpu/drm/sun4i/sun8i_ui_layer.c
+@@ -179,6 +179,14 @@ static int sun8i_ui_layer_atomic_check(struct drm_plane *plane,
+ }
+ 
+ 
++static void sun8i_ui_layer_atomic_disable(struct drm_plane *plane,
++					  struct drm_atomic_commit *state)
++{
++	struct sun8i_layer *layer = plane_to_sun8i_layer(plane);
++
++	sun8i_ui_layer_disable(layer);
++}
++
+ static void sun8i_ui_layer_atomic_update(struct drm_plane *plane,
+ 					 struct drm_atomic_commit *state)
+ {
+@@ -199,6 +207,7 @@ static void sun8i_ui_layer_atomic_update(struct drm_plane *plane,
+ static const struct drm_plane_helper_funcs sun8i_ui_layer_helper_funcs = {
+ 	.atomic_check	= sun8i_ui_layer_atomic_check,
+ 	.atomic_update	= sun8i_ui_layer_atomic_update,
++	.atomic_disable	= sun8i_ui_layer_atomic_disable,
+ };
+ 
+ static const struct drm_plane_funcs sun8i_ui_layer_funcs = {
+diff --git a/drivers/gpu/drm/sun4i/sun8i_vi_layer.c b/drivers/gpu/drm/sun4i/sun8i_vi_layer.c
+index 5e3fc7ed500..1f4e71a80db 100644
+--- a/drivers/gpu/drm/sun4i/sun8i_vi_layer.c
++++ b/drivers/gpu/drm/sun4i/sun8i_vi_layer.c
+@@ -288,6 +288,14 @@ static int sun8i_vi_layer_atomic_check(struct drm_plane *plane,
+ 						   true, true);
+ }
+ 
++static void sun8i_vi_layer_atomic_disable(struct drm_plane *plane,
++					  struct drm_atomic_commit *state)
++{
++	struct sun8i_layer *layer = plane_to_sun8i_layer(plane);
++
++	sun8i_vi_layer_disable(layer);
++}
++
+ static void sun8i_vi_layer_atomic_update(struct drm_plane *plane,
+ 					 struct drm_atomic_commit *state)
+ {
+@@ -326,6 +334,7 @@ static bool sun8i_vi_layer_format_mod_supported(struct drm_plane *plane,
+ static const struct drm_plane_helper_funcs sun8i_vi_layer_helper_funcs = {
+ 	.atomic_check	= sun8i_vi_layer_atomic_check,
+ 	.atomic_update	= sun8i_vi_layer_atomic_update,
++	.atomic_disable	= sun8i_vi_layer_atomic_disable,
+ };
+ 
+ static const struct drm_plane_funcs sun8i_vi_layer_funcs = {
+-- 
+2.30.2
+

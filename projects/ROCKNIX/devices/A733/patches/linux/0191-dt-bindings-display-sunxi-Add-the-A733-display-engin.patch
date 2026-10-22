@@ -1,0 +1,155 @@
+From a236d7e18e2da5ebf6a1ce52a161b642801a5b60 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Sat, 5 Sep 2026 01:16:42 +0200
+Subject: [PATCH 191/211] dt-bindings: display: sunxi: Add the A733 display
+ engine
+
+The A733 carries the same Display Engine 3.3 as the H616. Its writeback
+keeps the H616 as a fallback, while the clock controller, the plane pool
+and the mixer each get a compatible of their own.
+
+Two pieces did not fit the existing schemas. The A733 has no IOMMU driver
+yet, so only the H616 planes must name one, and every block here sits in a
+power domain.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ .../clock/allwinner,sun8i-a83t-de2-clk.yaml      |  1 +
+ .../allwinner,sun4i-a10-display-engine.yaml      |  1 +
+ .../display/allwinner,sun50i-h6-de3-wb.yaml      | 16 ++++++++++++----
+ .../allwinner,sun50i-h616-de33-planes.yaml       | 12 +++++++++++-
+ .../display/allwinner,sun8i-a83t-de2-mixer.yaml  |  5 +++++
+ 5 files changed, 30 insertions(+), 5 deletions(-)
+
+diff --git a/Documentation/devicetree/bindings/clock/allwinner,sun8i-a83t-de2-clk.yaml b/Documentation/devicetree/bindings/clock/allwinner,sun8i-a83t-de2-clk.yaml
+index 7fcd55d468d..7c9b132ec10 100644
+--- a/Documentation/devicetree/bindings/clock/allwinner,sun8i-a83t-de2-clk.yaml
++++ b/Documentation/devicetree/bindings/clock/allwinner,sun8i-a83t-de2-clk.yaml
+@@ -26,6 +26,7 @@ properties:
+       - const: allwinner,sun50i-h5-de2-clk
+       - const: allwinner,sun50i-h6-de3-clk
+       - const: allwinner,sun50i-h616-de33-clk
++      - const: allwinner,sun60i-a733-de33-clk
+       - items:
+           - const: allwinner,sun8i-r40-de2-clk
+           - const: allwinner,sun8i-h3-de2-clk
+diff --git a/Documentation/devicetree/bindings/display/allwinner,sun4i-a10-display-engine.yaml b/Documentation/devicetree/bindings/display/allwinner,sun4i-a10-display-engine.yaml
+index 6e26f184ab2..4176e5617dc 100644
+--- a/Documentation/devicetree/bindings/display/allwinner,sun4i-a10-display-engine.yaml
++++ b/Documentation/devicetree/bindings/display/allwinner,sun4i-a10-display-engine.yaml
+@@ -66,6 +66,7 @@ properties:
+       - allwinner,sun50i-a64-display-engine
+       - allwinner,sun50i-h6-display-engine
+       - allwinner,sun50i-h616-display-engine
++      - allwinner,sun60i-a733-display-engine
+ 
+   allwinner,pipelines:
+     $ref: /schemas/types.yaml#/definitions/phandle-array
+diff --git a/Documentation/devicetree/bindings/display/allwinner,sun50i-h6-de3-wb.yaml b/Documentation/devicetree/bindings/display/allwinner,sun50i-h6-de3-wb.yaml
+index d539a91887f..76723e014b0 100644
+--- a/Documentation/devicetree/bindings/display/allwinner,sun50i-h6-de3-wb.yaml
++++ b/Documentation/devicetree/bindings/display/allwinner,sun50i-h6-de3-wb.yaml
+@@ -11,9 +11,13 @@ maintainers:
+ 
+ properties:
+   compatible:
+-    enum:
+-      - allwinner,sun50i-h6-de3-wb
+-      - allwinner,sun50i-h616-de33-wb
++    oneOf:
++      - enum:
++          - allwinner,sun50i-h6-de3-wb
++          - allwinner,sun50i-h616-de33-wb
++      - items:
++          - const: allwinner,sun60i-a733-de33-wb
++          - const: allwinner,sun50i-h616-de33-wb
+ 
+   reg:
+     minItems: 1
+@@ -40,6 +44,9 @@ properties:
+   interrupts:
+     maxItems: 1
+ 
++  power-domains:
++    maxItems: 1
++
+   resets:
+     maxItems: 1
+ 
+@@ -94,7 +101,8 @@ allOf:
+   - if:
+       properties:
+         compatible:
+-          const: allwinner,sun50i-h616-de33-wb
++          contains:
++            const: allwinner,sun50i-h616-de33-wb
+     then:
+       properties:
+         reg:
+diff --git a/Documentation/devicetree/bindings/display/allwinner,sun50i-h616-de33-planes.yaml b/Documentation/devicetree/bindings/display/allwinner,sun50i-h616-de33-planes.yaml
+index 16121819a37..149ec3a1bfb 100644
+--- a/Documentation/devicetree/bindings/display/allwinner,sun50i-h616-de33-planes.yaml
++++ b/Documentation/devicetree/bindings/display/allwinner,sun50i-h616-de33-planes.yaml
+@@ -18,6 +18,7 @@ properties:
+   compatible:
+     enum:
+       - allwinner,sun50i-h616-de33-planes
++      - allwinner,sun60i-a733-de33-planes
+ 
+   reg:
+     maxItems: 1
+@@ -34,11 +35,20 @@ properties:
+ required:
+   - compatible
+   - reg
+-  - iommus
+   - allwinner,plane-mapping
+ 
+ additionalProperties: false
+ 
++if:
++  properties:
++    compatible:
++      contains:
++        const: allwinner,sun50i-h616-de33-planes
++
++then:
++  required:
++    - iommus
++
+ examples:
+   - |
+     planes: planes@100000 {
+diff --git a/Documentation/devicetree/bindings/display/allwinner,sun8i-a83t-de2-mixer.yaml b/Documentation/devicetree/bindings/display/allwinner,sun8i-a83t-de2-mixer.yaml
+index 064e4ca7e41..6fc090af243 100644
+--- a/Documentation/devicetree/bindings/display/allwinner,sun8i-a83t-de2-mixer.yaml
++++ b/Documentation/devicetree/bindings/display/allwinner,sun8i-a83t-de2-mixer.yaml
+@@ -25,6 +25,7 @@ properties:
+       - allwinner,sun50i-a64-de2-mixer-1
+       - allwinner,sun50i-h6-de3-mixer-0
+       - allwinner,sun50i-h616-de33-mixer-0
++      - allwinner,sun60i-a733-de33-mixer-0
+ 
+   reg: true
+ 
+@@ -43,6 +44,9 @@ properties:
+   iommus:
+     maxItems: 1
+ 
++  power-domains:
++    maxItems: 1
++
+   resets:
+     maxItems: 1
+ 
+@@ -74,6 +78,7 @@ allOf:
+           contains:
+             enum:
+               - allwinner,sun50i-h616-de33-mixer-0
++              - allwinner,sun60i-a733-de33-mixer-0
+     then:
+       properties:
+         reg:
+-- 
+2.30.2
+

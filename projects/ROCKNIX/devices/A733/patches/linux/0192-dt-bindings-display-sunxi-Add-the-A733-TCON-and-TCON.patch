@@ -1,0 +1,137 @@
+From fc0d932c46dda7f0d0d6d86ed9f25f4aaf4b557f Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Sat, 5 Sep 2026 01:16:42 +0200
+Subject: [PATCH 192/211] dt-bindings: display: sunxi: Add the A733 TCON and
+ TCON TOP
+
+The timing controller keeps the H616 as a fallback. The top in front of
+it is a cut down version: it hands out no clocks, so it has neither
+"#clock-cells" nor clock-output-names and takes a single bus clock, and
+two resets guard it rather than one.
+
+Both live in a power domain.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ .../display/allwinner,sun4i-a10-tcon.yaml     |  7 +++
+ .../display/allwinner,sun8i-r40-tcon-top.yaml | 46 +++++++++++++++++--
+ 2 files changed, 48 insertions(+), 5 deletions(-)
+
+diff --git a/Documentation/devicetree/bindings/display/allwinner,sun4i-a10-tcon.yaml b/Documentation/devicetree/bindings/display/allwinner,sun4i-a10-tcon.yaml
+index eb8d1fd9d8a..bab44f3b17b 100644
+--- a/Documentation/devicetree/bindings/display/allwinner,sun4i-a10-tcon.yaml
++++ b/Documentation/devicetree/bindings/display/allwinner,sun4i-a10-tcon.yaml
+@@ -38,6 +38,10 @@ properties:
+       - const: allwinner,sun20i-d1-tcon-tv
+       - const: allwinner,sun50i-h616-tcon-tv
+ 
++      - items:
++          - const: allwinner,sun60i-a733-tcon-tv
++          - const: allwinner,sun50i-h616-tcon-tv
++
+       - items:
+           - enum:
+               - allwinner,sun7i-a20-tcon0
+@@ -87,6 +91,9 @@ properties:
+   dmas:
+     maxItems: 1
+ 
++  power-domains:
++    maxItems: 1
++
+   resets:
+     anyOf:
+       - items:
+diff --git a/Documentation/devicetree/bindings/display/allwinner,sun8i-r40-tcon-top.yaml b/Documentation/devicetree/bindings/display/allwinner,sun8i-r40-tcon-top.yaml
+index 41324e1376e..ad6b451130b 100644
+--- a/Documentation/devicetree/bindings/display/allwinner,sun8i-r40-tcon-top.yaml
++++ b/Documentation/devicetree/bindings/display/allwinner,sun8i-r40-tcon-top.yaml
+@@ -44,25 +44,30 @@ properties:
+       - allwinner,sun20i-d1-tcon-top
+       - allwinner,sun50i-h6-tcon-top
+       - allwinner,sun50i-h616-tcon-top
++      - allwinner,sun60i-a733-tcon-top
+ 
+   reg:
+     maxItems: 1
+ 
+   clocks:
+-    minItems: 2
++    minItems: 1
+     maxItems: 6
+ 
+   clock-names:
+-    minItems: 2
++    minItems: 1
+     maxItems: 6
+ 
+   clock-output-names:
+     minItems: 1
+     maxItems: 3
+ 
+-  resets:
++  power-domains:
+     maxItems: 1
+ 
++  resets:
++    minItems: 1
++    maxItems: 2
++
+   ports:
+     $ref: /schemas/graph.yaml#/properties/ports
+ 
+@@ -104,18 +109,49 @@ properties:
+       - port@5
+ 
+ required:
+-  - "#clock-cells"
+   - compatible
+   - reg
+   - clocks
+   - clock-names
+-  - clock-output-names
+   - resets
+   - ports
+ 
+ additionalProperties: false
+ 
+ allOf:
++  - if:
++      properties:
++        compatible:
++          contains:
++            const: allwinner,sun60i-a733-tcon-top
++
++    then:
++      properties:
++        "#clock-cells": false
++        clock-output-names: false
++
++        clocks:
++          items:
++            - description: The TCON TOP interface clock
++
++        clock-names:
++          items:
++            - const: bus
++
++        resets:
++          items:
++            - description: The TCON TOP reset
++            - description: The video output island reset
++
++    else:
++      required:
++        - "#clock-cells"
++        - clock-output-names
++
++      properties:
++        resets:
++          maxItems: 1
++
+   - if:
+       properties:
+         compatible:
+-- 
+2.30.2
+

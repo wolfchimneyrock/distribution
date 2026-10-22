@@ -1,0 +1,50 @@
+From 3b1428ed29c0dc9c82e0ef4789f4b5a95e01a8e9 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Sat, 5 Sep 2026 01:35:36 +0200
+Subject: [PATCH 194/211] drm/bridge: synopsys: dw-hdmi: Export the SVSRET
+ helper
+
+Platforms that drive a Synopsys PHY through their own phy_ops need to
+leave low power consumption mode the same way dw_hdmi_phy_configure()
+does, rather than open coding the register write.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ drivers/gpu/drm/bridge/synopsys/dw-hdmi.c | 3 ++-
+ include/drm/bridge/dw_hdmi.h              | 1 +
+ 2 files changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/bridge/synopsys/dw-hdmi.c b/drivers/gpu/drm/bridge/synopsys/dw-hdmi.c
+index d47b678f058..e73abcde2b0 100644
+--- a/drivers/gpu/drm/bridge/synopsys/dw-hdmi.c
++++ b/drivers/gpu/drm/bridge/synopsys/dw-hdmi.c
+@@ -1455,12 +1455,13 @@ static void dw_hdmi_phy_enable_tmds(struct dw_hdmi *hdmi, u8 enable)
+ 			 HDMI_PHY_CONF0_ENTMDS_MASK);
+ }
+ 
+-static void dw_hdmi_phy_enable_svsret(struct dw_hdmi *hdmi, u8 enable)
++void dw_hdmi_phy_enable_svsret(struct dw_hdmi *hdmi, u8 enable)
+ {
+ 	hdmi_mask_writeb(hdmi, enable, HDMI_PHY_CONF0,
+ 			 HDMI_PHY_CONF0_SVSRET_OFFSET,
+ 			 HDMI_PHY_CONF0_SVSRET_MASK);
+ }
++EXPORT_SYMBOL_GPL(dw_hdmi_phy_enable_svsret);
+ 
+ void dw_hdmi_phy_gen2_pddq(struct dw_hdmi *hdmi, u8 enable)
+ {
+diff --git a/include/drm/bridge/dw_hdmi.h b/include/drm/bridge/dw_hdmi.h
+index 791e9f2617c..b31a0b40263 100644
+--- a/include/drm/bridge/dw_hdmi.h
++++ b/include/drm/bridge/dw_hdmi.h
+@@ -231,6 +231,7 @@ void dw_hdmi_phy_gen1_reset(struct dw_hdmi *hdmi);
+ void dw_hdmi_phy_gen2_pddq(struct dw_hdmi *hdmi, u8 enable);
+ void dw_hdmi_phy_gen2_txpwron(struct dw_hdmi *hdmi, u8 enable);
+ void dw_hdmi_phy_gen2_reset(struct dw_hdmi *hdmi);
++void dw_hdmi_phy_enable_svsret(struct dw_hdmi *hdmi, u8 enable);
+ 
+ enum drm_connector_status dw_hdmi_phy_read_hpd(struct dw_hdmi *hdmi,
+ 					       void *data);
+-- 
+2.30.2
+

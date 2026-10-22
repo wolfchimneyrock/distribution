@@ -1,0 +1,88 @@
+From 7f7859dc13a7952822131050491f623626bcbcac Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Fri, 4 Sep 2026 14:03:21 +0200
+Subject: [PATCH 178/211] arm64: dts: allwinner: a733: add display writeback
+
+Wire the mixer to the writeback engine as well as to the timing controller,
+so the display engine can be exercised and its output checked without a
+display attached. Also correct the timing controller interrupt.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ .../arm64/boot/dts/allwinner/sun60i-a733.dtsi | 42 ++++++++++++++++++-
+ 1 file changed, 40 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/allwinner/sun60i-a733.dtsi b/arch/arm64/boot/dts/allwinner/sun60i-a733.dtsi
+index 73e67e2ec93..ede17096bfa 100644
+--- a/arch/arm64/boot/dts/allwinner/sun60i-a733.dtsi
++++ b/arch/arm64/boot/dts/allwinner/sun60i-a733.dtsi
+@@ -163,6 +163,36 @@ display_clocks: clock@8000 {
+ 				#reset-cells = <1>;
+ 			};
+ 
++			writeback: writeback@11000 {
++				compatible = "allwinner,sun60i-a733-de33-wb",
++					     "allwinner,sun50i-h616-de33-wb";
++				reg = <0x11000 0x1000>, <0x8200 0x20>;
++				reg-names = "writeback", "rcq";
++				clocks = <&display_clocks CLK_BUS_MIXER0>,
++					 <&display_clocks CLK_WB>;
++				clock-names = "bus", "mod";
++				resets = <&display_clocks RST_WB>;
++				interrupts = <GIC_SPI 50 IRQ_TYPE_LEVEL_HIGH>;
++				allwinner,top = <&display_clocks>;
++				power-domains = <&pck600 PD_DE_SYS>;
++
++				ports {
++					#address-cells = <1>;
++					#size-cells = <0>;
++
++					writeback_in: port@0 {
++						#address-cells = <1>;
++						#size-cells = <0>;
++						reg = <0>;
++
++						writeback_in_mixer0: endpoint@0 {
++							reg = <0>;
++							remote-endpoint = <&mixer0_out_writeback>;
++						};
++					};
++				};
++			};
++
+ 			planes: planes@100000 {
+ 				compatible = "allwinner,sun60i-a733-de33-planes";
+ 				reg = <0x100000 0x180000>;
+@@ -186,11 +216,19 @@ ports {
+ 					#size-cells = <0>;
+ 
+ 					mixer0_out: port@1 {
++						#address-cells = <1>;
++						#size-cells = <0>;
+ 						reg = <1>;
+ 
+-						mixer0_out_tcon_tv0: endpoint {
++						mixer0_out_tcon_tv0: endpoint@0 {
++							reg = <0>;
+ 							remote-endpoint = <&tcon_tv0_in_mixer0>;
+ 						};
++
++						mixer0_out_writeback: endpoint@1 {
++							reg = <1>;
++							remote-endpoint = <&writeback_in_mixer0>;
++						};
+ 					};
+ 				};
+ 			};
+@@ -1064,7 +1102,7 @@ tcon_tv0: lcd-controller@5730000 {
+ 			compatible = "allwinner,sun60i-a733-tcon-tv",
+ 				     "allwinner,sun50i-h616-tcon-tv";
+ 			reg = <0x05730000 0x1000>;
+-			interrupts = <GIC_SPI 25 IRQ_TYPE_LEVEL_HIGH>;
++			interrupts = <GIC_SPI 57 IRQ_TYPE_LEVEL_HIGH>;
+ 			clocks = <&ccu CLK_BUS_TCON_TV0>, <&ccu CLK_HDMI_TV>;
+ 			clock-names = "ahb", "tcon-ch1";
+ 			resets = <&ccu RST_BUS_TCON_TV0>;
+-- 
+2.30.2
+

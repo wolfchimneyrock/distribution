@@ -1,0 +1,116 @@
+From c14deb1bafb9da2ebb1763f25a0e0a03c90f8c62 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Wed, 2 Sep 2026 22:12:09 +0200
+Subject: [PATCH 056/211] arm64: dts: allwinner: a733: cubie-a7a: enable USB
+ and the Wi-Fi module
+
+Enable the two USB2.0 hosts and the USB3 controller. The FCU760K Wi-Fi
+and Bluetooth module (AIC8800D80) hangs off an FE1.1S hub on the USB2
+port of the USB3 controller, so the controller runs in high speed mode
+with the PIPE clock taken from the USB2 side and the UTMI and PIPE
+clocks at the rates the vendor tree uses. The module's 3.3 V switch and
+its chip enable are GPIO controlled and modelled as always-on regulators.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ .../dts/allwinner/sun60i-a733-cubie-a7a.dts   | 56 +++++++++++++++++++
+ 1 file changed, 56 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/allwinner/sun60i-a733-cubie-a7a.dts b/arch/arm64/boot/dts/allwinner/sun60i-a733-cubie-a7a.dts
+index b2f0aeb6bae..b5f45cb96bb 100644
+--- a/arch/arm64/boot/dts/allwinner/sun60i-a733-cubie-a7a.dts
++++ b/arch/arm64/boot/dts/allwinner/sun60i-a733-cubie-a7a.dts
+@@ -4,6 +4,7 @@
+ 
+ #include "sun60i-a733.dtsi"
+ 
++#include <dt-bindings/clock/sun60i-a733-serdes-ccu.h>
+ #include <dt-bindings/gpio/gpio.h>
+ #include <dt-bindings/interrupt-controller/irq.h>
+ #include <dt-bindings/leds/common.h>
+@@ -57,6 +58,30 @@ reg_vcc5v: vcc5v {
+ 		regulator-always-on;
+ 	};
+ 
++	reg_wifi_3v3: wifi-3v3 {
++		/* WPM2015 load switch in front of the FCU760K module */
++		compatible = "regulator-fixed";
++		regulator-name = "wifi-3v3";
++		regulator-min-microvolt = <3300000>;
++		regulator-max-microvolt = <3300000>;
++		vin-supply = <&reg_dcdc1>;
++		gpio = <&r_pio 1 0 GPIO_ACTIVE_HIGH>; /* PM0 */
++		enable-active-high;
++		regulator-always-on;
++	};
++
++	reg_wifi_en: wifi-en {
++		/* CHIP_EN of the FCU760K module */
++		compatible = "regulator-fixed";
++		regulator-name = "wifi-en";
++		regulator-min-microvolt = <3300000>;
++		regulator-max-microvolt = <3300000>;
++		vin-supply = <&reg_wifi_3v3>;
++		gpio = <&r_pio 1 1 GPIO_ACTIVE_HIGH>; /* PM1 */
++		enable-active-high;
++		regulator-always-on;
++	};
++
+ 	reg_ldo2v5: ldo2v5 {
+ 		/* SY8089A buck feeding the PMIC BLDO and CLDO groups */
+ 		compatible = "regulator-fixed";
+@@ -68,6 +93,14 @@ reg_ldo2v5: ldo2v5 {
+ 	};
+ };
+ 
++&ehci0 {
++	status = "okay";
++};
++
++&ehci1 {
++	status = "okay";
++};
++
+ &gmac0 {
+ 	/* No PHY driver, so the MAC adds the RGMII delays */
+ 	phy-mode = "rgmii";
+@@ -125,6 +158,14 @@ &mmc2 {
+ 	status = "okay";
+ };
+ 
++&ohci0 {
++	status = "okay";
++};
++
++&ohci1 {
++	status = "okay";
++};
++
+ &pio {
+ 	vcc-pb-supply = <&reg_swout2>;	/* via VCC-IO */
+ 	vcc-pc-supply = <&reg_cldo5>;
+@@ -460,6 +501,21 @@ flash@0 {
+ 	};
+ };
+ 
++&usb3 {
++	/* No combo PHY in use, take the PIPE clock from the USB2 side */
++	assigned-clocks = <&serdes_ccu CLK_SERDES_USB3_PIPE>,
++			  <&ccu CLK_USB2_SUSPEND>,
++			  <&ccu CLK_USB2_U3_UTMI>,
++			  <&ccu CLK_USB2_U2_PIPE>;
++	assigned-clock-parents = <&ccu CLK_USB2_U2_PIPE>, <&ccu CLK_SYS_24M>;
++	assigned-clock-rates = <0>, <0>, <300000000>, <480000000>;
++	status = "okay";
++};
++
++&usbphy {
++	status = "okay";
++};
++
+ &uart0 {
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&uart0_pb9_pb10_pins>;
+-- 
+2.30.2
+

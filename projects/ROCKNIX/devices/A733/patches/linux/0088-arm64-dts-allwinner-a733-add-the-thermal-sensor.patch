@@ -1,0 +1,50 @@
+From a47fb089662f62536fad5eee4f5fd7c4636944f2 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Fri, 4 Sep 2026 11:44:05 +0200
+Subject: [PATCH 088/211] arm64: dts: allwinner: a733: add the thermal sensor
+
+The controller carries five sensors and needs the GPADC clock next to
+its own, plus the calibration the factory left in the efuse.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ arch/arm64/boot/dts/allwinner/sun60i-a733.dtsi | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/allwinner/sun60i-a733.dtsi b/arch/arm64/boot/dts/allwinner/sun60i-a733.dtsi
+index ee9775c4bfa..f6f0eb04489 100644
+--- a/arch/arm64/boot/dts/allwinner/sun60i-a733.dtsi
++++ b/arch/arm64/boot/dts/allwinner/sun60i-a733.dtsi
+@@ -481,6 +481,18 @@ i2c12: i2c@251c000 {
+ 			#size-cells = <0>;
+ 		};
+ 
++		ths: thermal-sensor@2522000 {
++			compatible = "allwinner,sun60i-a733-ths";
++			reg = <0x02522000 0x1000>;
++			interrupts = <GIC_SPI 39 IRQ_TYPE_LEVEL_HIGH>;
++			clocks = <&ccu CLK_BUS_THS0>, <&ccu CLK_GPADC0_24M>;
++			clock-names = "bus", "mod";
++			resets = <&ccu RST_BUS_THS0>;
++			nvmem-cells = <&ths_calibration>;
++			nvmem-cell-names = "calibration";
++			#thermal-sensor-cells = <1>;
++		};
++
+ 		spi0: spi@2540000 {
+ 			compatible = "allwinner,sun60i-a733-spi",
+ 				     "allwinner,sun55i-a523-spi";
+@@ -563,6 +575,10 @@ sid: efuse@3006000 {
+ 			#address-cells = <1>;
+ 			#size-cells = <1>;
+ 
++			ths_calibration: thermal-sensor-calibration@44 {
++				reg = <0x44 0xc>;
++			};
++
+ 			cpu_speed_grade: cpu-speed-grade@4c {
+ 				reg = <0x4c 0x4>;
+ 			};
+-- 
+2.30.2
+

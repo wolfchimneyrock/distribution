@@ -1,0 +1,30 @@
+From 48ebe1beafd2ae95883920ae658e0a9f550a6dd3 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Sat, 5 Sep 2026 06:22:15 +0200
+Subject: [PATCH 201/211] drm/imagination: Mark BXM-4-64 MC1 36.56.104.183 as
+ supported
+
+This is the core in the Allwinner A733. It runs the firmware Imagination
+publishes for it and has been driving displays and compute for days on the
+Radxa Cubie A7A, so stop demanding exp_hw_support for it.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ drivers/gpu/drm/imagination/pvr_device.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/gpu/drm/imagination/pvr_device.c b/drivers/gpu/drm/imagination/pvr_device.c
+index 54fe4180c73..05c2c81521d 100644
+--- a/drivers/gpu/drm/imagination/pvr_device.c
++++ b/drivers/gpu/drm/imagination/pvr_device.c
+@@ -533,6 +533,7 @@ pvr_gpu_support_level(const struct pvr_gpu_id *gpu_id)
+ 	case PVR_PACKED_BVNC(33, 15, 11, 3):
+ 	case PVR_PACKED_BVNC(36, 52, 104, 182):
+ 	case PVR_PACKED_BVNC(36, 53, 104, 796):
++	case PVR_PACKED_BVNC(36, 56, 104, 183):
+ 		return PVR_GPU_SUPPORTED;
+ 
+ 	default:
+-- 
+2.30.2
+

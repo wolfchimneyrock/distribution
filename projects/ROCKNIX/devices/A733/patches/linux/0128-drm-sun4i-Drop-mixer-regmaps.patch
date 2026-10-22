@@ -1,0 +1,82 @@
+From 58a3bd8bbd4b4c521c9f05f14001211665a2b9d6 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Sun, 19 Jul 2026 16:14:15 +0200
+Subject: [PATCH 128/211] drm/sun4i: Drop mixer regmaps
+
+Mixer-global and blender state is written through register shadows and
+the remaining top and double-buffer registers use writel() directly, so
+the mixer and top regmaps have no users left. Remove them.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ drivers/gpu/drm/sun4i/sun8i_mixer.c | 30 -----------------------------
+ drivers/gpu/drm/sun4i/sun8i_mixer.h |  1 -
+ 2 files changed, 31 deletions(-)
+
+diff --git a/drivers/gpu/drm/sun4i/sun8i_mixer.c b/drivers/gpu/drm/sun4i/sun8i_mixer.c
+index cece305a13f..f2276d567ae 100644
+--- a/drivers/gpu/drm/sun4i/sun8i_mixer.c
++++ b/drivers/gpu/drm/sun4i/sun8i_mixer.c
+@@ -471,22 +471,6 @@ static const struct sunxi_engine_ops sun50i_engine_ops = {
+ 	.mode_set	= sun8i_mixer_mode_set,
+ };
+ 
+-static const struct regmap_config sun8i_mixer_regmap_config = {
+-	.name		= "display",
+-	.reg_bits	= 32,
+-	.val_bits	= 32,
+-	.reg_stride	= 4,
+-	.max_register	= 0xffffc, /* guessed */
+-};
+-
+-static const struct regmap_config sun8i_top_regmap_config = {
+-	.name		= "top",
+-	.reg_bits	= 32,
+-	.val_bits	= 32,
+-	.reg_stride	= 4,
+-	.max_register	= 0x3c,
+-};
+-
+ static int sun8i_mixer_of_get_id(struct device_node *node)
+ {
+ 	struct device_node *ep, *remote;
+@@ -647,24 +631,10 @@ static int sun8i_mixer_bind(struct device *dev, struct device *master,
+ 	if (IS_ERR(mixer->base))
+ 		return PTR_ERR(mixer->base);
+ 
+-	mixer->engine.regs = devm_regmap_init_mmio(dev, mixer->base,
+-						   &sun8i_mixer_regmap_config);
+-	if (IS_ERR(mixer->engine.regs)) {
+-		dev_err(dev, "Couldn't create the mixer regmap\n");
+-		return PTR_ERR(mixer->engine.regs);
+-	}
+-
+ 	if (mixer->cfg->de_type == SUN8I_MIXER_DE33) {
+ 		mixer->top = devm_platform_ioremap_resource_byname(pdev, "top");
+ 		if (IS_ERR(mixer->top))
+ 			return PTR_ERR(mixer->top);
+-
+-		mixer->top_regs = devm_regmap_init_mmio(dev, mixer->top,
+-							&sun8i_top_regmap_config);
+-		if (IS_ERR(mixer->top_regs)) {
+-			dev_err(dev, "Couldn't create the top regmap\n");
+-			return PTR_ERR(mixer->top_regs);
+-		}
+ 	}
+ 
+ 	mixer->reset = devm_reset_control_get(dev, NULL);
+diff --git a/drivers/gpu/drm/sun4i/sun8i_mixer.h b/drivers/gpu/drm/sun4i/sun8i_mixer.h
+index b028f3afd80..ca7d73dd33a 100644
+--- a/drivers/gpu/drm/sun4i/sun8i_mixer.h
++++ b/drivers/gpu/drm/sun4i/sun8i_mixer.h
+@@ -228,7 +228,6 @@ struct sun8i_mixer {
+ 	struct clk			*bus_clk;
+ 	struct clk			*mod_clk;
+ 
+-	struct regmap			*top_regs;
+ 	struct device			*planes_dev;
+ 
+ 	struct sun8i_rdma		*rdma;
+-- 
+2.30.2
+

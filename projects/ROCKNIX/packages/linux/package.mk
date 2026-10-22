@@ -46,6 +46,14 @@ case ${DEVICE} in
     PKG_URL="https://www.kernel.org/pub/linux/kernel/v${PKG_VERSION/.*/}.x/${PKG_NAME}-${PKG_VERSION}.tar.xz"
     PKG_PATCH_DIRS+=" 7.0"
     ;;
+  A733)
+    # Linux 7.3 + Jernej Skrabec's A733 bring-up (github.com/jernejsk/linux-1
+    # a733-display-wip @ 04172a6d4b7f, rebased from 7.3-rc1) in devices/A733/patches/linux.
+    PKG_VERSION="7.3"
+    PKG_SHA256="87363c24f10e06321eb362765521094e94471f6bff8bce2d6b3e40f39f004953"
+    PKG_URL="https://www.kernel.org/pub/linux/kernel/v${PKG_VERSION/.*/}.x/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+    PKG_PATCH_DIRS=""
+    ;;
   RK3399)
     PKG_VERSION="6.18.54"
     PKG_SHA256="9df30b02dd8102bbd0be52556288ef6889ddbe7f1ddb96fbf847d0becf3eacac"

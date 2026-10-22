@@ -1,0 +1,135 @@
+From 769c8633d1b41ae5a1119f248278a36e6370e02c Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Sat, 5 Sep 2026 14:53:25 +0200
+Subject: [PATCH 210/211] drm/imagination: Hard reset the GPU when jobs keep
+ timing out
+
+The firmware normally notices a locked-up data master and resets the
+guilty context. A firmware that has stopped scheduling altogether never
+does, and the driver only logged "Job timeout" once a minute for ever
+while the device stayed powered and unusable.
+
+Count consecutive job timeouts per queue, cleared whenever a job on
+that queue completes, and after the second one request a hard reset
+from a work item, since the timeout handler itself runs with the
+scheduler stopped.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ drivers/gpu/drm/imagination/pvr_device.h |  6 ++++++
+ drivers/gpu/drm/imagination/pvr_power.c  | 23 +++++++++++++++++++++++
+ drivers/gpu/drm/imagination/pvr_queue.c  |  4 ++++
+ drivers/gpu/drm/imagination/pvr_queue.h  |  6 ++++++
+ 4 files changed, 39 insertions(+)
+
+diff --git a/drivers/gpu/drm/imagination/pvr_device.h b/drivers/gpu/drm/imagination/pvr_device.h
+index e33b144ccb6..ea33a16f353 100644
+--- a/drivers/gpu/drm/imagination/pvr_device.h
++++ b/drivers/gpu/drm/imagination/pvr_device.h
+@@ -260,6 +260,12 @@ struct pvr_device {
+ 		 * KCCB has been stalled for.
+ 		 */
+ 		u32 kccb_stall_count;
++
++		/**
++		 * @watchdog.reset_work: Hard reset requested by a queue whose
++		 * jobs keep timing out without the firmware noticing.
++		 */
++		struct work_struct reset_work;
+ 	} watchdog;
+ 
+ 	/**
+diff --git a/drivers/gpu/drm/imagination/pvr_power.c b/drivers/gpu/drm/imagination/pvr_power.c
+index 3610325417d..6f687db3143 100644
+--- a/drivers/gpu/drm/imagination/pvr_power.c
++++ b/drivers/gpu/drm/imagination/pvr_power.c
+@@ -96,6 +96,7 @@ pvr_power_fw_disable(struct pvr_device *pvr_dev, bool hard_reset, bool rpm_suspe
+ 
+ 	if (!hard_reset) {
+ 		cancel_delayed_work_sync(&pvr_dev->watchdog.work);
++	cancel_work_sync(&pvr_dev->watchdog.reset_work);
+ 
+ 		err = pvr_power_request_idle(pvr_dev);
+ 		if (err)
+@@ -246,10 +247,31 @@ pvr_watchdog_worker(struct work_struct *work)
+  *  * 0 on success, or
+  *  * -%ENOMEM on out of memory.
+  */
++/*
++ * The firmware normally spots a locked-up data master itself and resets the
++ * guilty context. When jobs on a queue time out again and again with nothing
++ * completing and no such notification, it has not, and the whole core has to
++ * be brought back the hard way.
++ */
++static void
++pvr_lockup_reset_worker(struct work_struct *work)
++{
++	struct pvr_device *pvr_dev = container_of(work, struct pvr_device,
++						  watchdog.reset_work);
++
++	if (pvr_dev->lost)
++		return;
++
++	drm_err(from_pvr_device(pvr_dev),
++		"Jobs keep timing out, resetting the GPU\n");
++	pvr_power_reset(pvr_dev, true);
++}
++
+ int
+ pvr_watchdog_init(struct pvr_device *pvr_dev)
+ {
+ 	INIT_DELAYED_WORK(&pvr_dev->watchdog.work, pvr_watchdog_worker);
++	INIT_WORK(&pvr_dev->watchdog.reset_work, pvr_lockup_reset_worker);
+ 
+ 	return 0;
+ }
+@@ -631,6 +653,7 @@ void
+ pvr_watchdog_fini(struct pvr_device *pvr_dev)
+ {
+ 	cancel_delayed_work_sync(&pvr_dev->watchdog.work);
++	cancel_work_sync(&pvr_dev->watchdog.reset_work);
+ }
+ 
+ int pvr_power_domains_init(struct pvr_device *pvr_dev)
+diff --git a/drivers/gpu/drm/imagination/pvr_queue.c b/drivers/gpu/drm/imagination/pvr_queue.c
+index 24a8645aa91..66fa9732b0e 100644
+--- a/drivers/gpu/drm/imagination/pvr_queue.c
++++ b/drivers/gpu/drm/imagination/pvr_queue.c
+@@ -875,6 +875,9 @@ pvr_queue_timedout_job(struct drm_sched_job *s_job)
+ 
+ 	dev_err(sched->dev, "Job timeout\n");
+ 
++	if (++queue->timeout_streak >= 2)
++		schedule_work(&pvr_dev->watchdog.reset_work);
++
+ 	/* Before we stop the scheduler, make sure the queue is out of any list, so
+ 	 * any call to pvr_queue_update_active_state_locked() that might happen
+ 	 * until the scheduler is really stopped doesn't end up re-inserting the
+@@ -984,6 +987,7 @@ pvr_queue_signal_done_fences(struct pvr_queue *queue)
+ 			dma_fence_signal(job->done_fence);
+ 			pvr_job_release_pm_ref(job);
+ 			atomic_dec(&queue->in_flight_job_count);
++			queue->timeout_streak = 0;
+ 		}
+ 	}
+ 	spin_unlock(&queue->scheduler.job_list_lock);
+diff --git a/drivers/gpu/drm/imagination/pvr_queue.h b/drivers/gpu/drm/imagination/pvr_queue.h
+index 149cc6d124b..f54cf743e25 100644
+--- a/drivers/gpu/drm/imagination/pvr_queue.h
++++ b/drivers/gpu/drm/imagination/pvr_queue.h
+@@ -139,6 +139,12 @@ struct pvr_queue {
+ 
+ 	/** @callstack_addr: Initial call stack address for register state object. */
+ 	u64 callstack_addr;
++
++	/**
++	 * @timeout_streak: Consecutive job timeouts with nothing completing in
++	 * between; the firmware has given up on the queue past a couple.
++	 */
++	u32 timeout_streak;
+ };
+ 
+ bool pvr_queue_fence_is_native(struct dma_fence *f);
+-- 
+2.30.2
+

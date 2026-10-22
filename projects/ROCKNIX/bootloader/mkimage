@@ -19,6 +19,10 @@ mkimage_uboot() {
     # H700
     echo "image: writing u-boot-sunxi-with-spl.bin to $(basename "${DISK}")..."
     dd if="${RELEASE_DIR}/3rdparty/bootloader/H700_${SUBDEVICE}_u-boot-sunxi-with-spl.bin" of="${DISK}" bs=1K seek=8 conv=fsync,notrunc >"${SAVE_ERROR}" 2>&1 || show_error
+  elif [ -f "${RELEASE_DIR}/3rdparty/bootloader/A733_u-boot-sunxi-with-spl.bin" ]; then
+    # A733: the boot ROM loads the SPL from 128 KiB (sector 256)
+    echo "image: writing u-boot-sunxi-with-spl.bin to $(basename "${DISK}")..."
+    dd if="${RELEASE_DIR}/3rdparty/bootloader/A733_u-boot-sunxi-with-spl.bin" of="${DISK}" bs=1K seek=128 conv=fsync,notrunc >"${SAVE_ERROR}" 2>&1 || show_error
   else
     echo "ERROR no u-boot file found for ${SUBDEVICE}"
   fi

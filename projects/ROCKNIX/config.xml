@@ -43,6 +43,10 @@
         <file>sun50i-h700-anbernic-rg-sp</file>
     </DDR3>
   </H700>
+  <A733 mkimage_options="dtb,extlinux,uboot" fdt="device_trees/sun60i-a733-cubie-a7a.dtb" fdt_type="fdt" dtb_prefix="allwinner">
+    <file>sun60i-a733-cubie-a7a</file>
+    <file>sun60i-a733-cubie-a7s</file>
+  </A733>
   <RK3326 dtb_prefix="rockchip">
     <!-- NOTE: DO NOT ADD ANY NEW RK3326 IMAGES -->
     <!-- see projects/ROCKNIX/devices/RK3326/packages/u-boot/package.mk, function generate_custom_extlinux_conf_files -->

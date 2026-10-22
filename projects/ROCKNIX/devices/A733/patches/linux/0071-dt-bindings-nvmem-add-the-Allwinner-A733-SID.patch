@@ -1,0 +1,28 @@
+From ad070432061302117f4435095378f569988cf197 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Thu, 3 Sep 2026 10:47:59 +0200
+Subject: [PATCH 071/211] dt-bindings: nvmem: add the Allwinner A733 SID
+
+The A733 SID holds its efuse contents at the same offset as the A64 one,
+including the DVFS code cpufreq uses to pick the voltage table.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ .../devicetree/bindings/nvmem/allwinner,sun4i-a10-sid.yaml       | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Documentation/devicetree/bindings/nvmem/allwinner,sun4i-a10-sid.yaml b/Documentation/devicetree/bindings/nvmem/allwinner,sun4i-a10-sid.yaml
+index f67470b8a2e..52de91285eb 100644
+--- a/Documentation/devicetree/bindings/nvmem/allwinner,sun4i-a10-sid.yaml
++++ b/Documentation/devicetree/bindings/nvmem/allwinner,sun4i-a10-sid.yaml
+@@ -28,6 +28,7 @@ properties:
+               - allwinner,sun50i-a100-sid
+               - allwinner,sun50i-h616-sid
+               - allwinner,sun55i-a523-sid
++              - allwinner,sun60i-a733-sid
+           - const: allwinner,sun50i-a64-sid
+       - const: allwinner,sun50i-h5-sid
+       - const: allwinner,sun50i-h6-sid
+-- 
+2.30.2
+

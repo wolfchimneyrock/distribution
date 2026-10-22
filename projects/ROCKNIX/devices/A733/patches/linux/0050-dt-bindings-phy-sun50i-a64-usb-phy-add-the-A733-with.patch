@@ -1,0 +1,124 @@
+From bb0a3102df71e090900b7c34e5d774be22eb015b Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Wed, 2 Sep 2026 22:12:08 +0200
+Subject: [PATCH 050/211] dt-bindings: phy: sun50i-a64-usb-phy: add the A733
+ with its third PHY
+
+The A733 has the usual pair of USB2 PHYs plus a third one that belongs
+to the USB3 controller. Its PMU registers live in the USB3 application
+register block, it has its own reference clock and its reset is
+provided by the SerDes subsystem. Allow the extra entries for the A733
+compatible, plus the power domain of the USB3 controller which the
+block sits in.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ .../phy/allwinner,sun50i-a64-usb-phy.yaml     | 52 +++++++++++++++++++
+ 1 file changed, 52 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/phy/allwinner,sun50i-a64-usb-phy.yaml b/Documentation/devicetree/bindings/phy/allwinner,sun50i-a64-usb-phy.yaml
+index 580c3296a18..eb0a77de17c 100644
+--- a/Documentation/devicetree/bindings/phy/allwinner,sun50i-a64-usb-phy.yaml
++++ b/Documentation/devicetree/bindings/phy/allwinner,sun50i-a64-usb-phy.yaml
+@@ -23,39 +23,55 @@ properties:
+           - enum:
+               - allwinner,sun50i-a100-usb-phy
+               - allwinner,sun55i-a523-usb-phy
++              - allwinner,sun60i-a733-usb-phy
+           - const: allwinner,sun20i-d1-usb-phy
+ 
+   reg:
++    minItems: 3
+     items:
+       - description: PHY Control registers
+       - description: PHY PMU0 registers
+       - description: PHY PMU1 registers
++      - description: PHY PMU2 registers
+ 
+   reg-names:
++    minItems: 3
+     items:
+       - const: phy_ctrl
+       - const: pmu0
+       - const: pmu1
++      - const: pmu2
+ 
+   clocks:
++    minItems: 2
+     items:
+       - description: USB OTG PHY bus clock
+       - description: USB Host 0 PHY bus clock
++      - description: USB2 PHY of the USB3 controller bus clock
+ 
+   clock-names:
++    minItems: 2
+     items:
+       - const: usb0_phy
+       - const: usb1_phy
++      - const: usb2_phy
+ 
+   resets:
++    minItems: 2
+     items:
+       - description: USB OTG reset
+       - description: USB Host 1 Controller reset
++      - description: USB3 Controller reset
+ 
+   reset-names:
++    minItems: 2
+     items:
+       - const: usb0_reset
+       - const: usb1_reset
++      - const: usb2_reset
++
++  power-domains:
++    maxItems: 1
+ 
+   usb0_id_det-gpios:
+     maxItems: 1
+@@ -84,6 +100,42 @@ required:
+   - resets
+   - reset-names
+ 
++allOf:
++  - if:
++      properties:
++        compatible:
++          contains:
++            const: allwinner,sun60i-a733-usb-phy
++    then:
++      properties:
++        reg:
++          minItems: 4
++        reg-names:
++          minItems: 4
++        clocks:
++          minItems: 3
++        clock-names:
++          minItems: 3
++        resets:
++          minItems: 3
++        reset-names:
++          minItems: 3
++    else:
++      properties:
++        reg:
++          maxItems: 3
++        reg-names:
++          maxItems: 3
++        clocks:
++          maxItems: 2
++        clock-names:
++          maxItems: 2
++        resets:
++          maxItems: 2
++        reset-names:
++          maxItems: 2
++        power-domains: false
++
+ additionalProperties: false
+ 
+ examples:
+-- 
+2.30.2
+

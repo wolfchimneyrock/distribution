@@ -1,0 +1,29 @@
+From ce1db498658cfbad84f9bfc026f05fb296192bd0 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Thu, 3 Sep 2026 08:44:19 +0200
+Subject: [PATCH 066/211] dt-bindings: gpu: img: add the Allwinner A733
+ BXM-4-64
+
+The Allwinner A733 integrates an Imagination BXM-4-64 MC1 GPU. Add the SoC
+specific compatible in front of the generic BXM-4-64 one.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ Documentation/devicetree/bindings/gpu/img,powervr-rogue.yaml | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Documentation/devicetree/bindings/gpu/img,powervr-rogue.yaml b/Documentation/devicetree/bindings/gpu/img,powervr-rogue.yaml
+index e9218e0f363..3c658926300 100644
+--- a/Documentation/devicetree/bindings/gpu/img,powervr-rogue.yaml
++++ b/Documentation/devicetree/bindings/gpu/img,powervr-rogue.yaml
+@@ -37,6 +37,7 @@ properties:
+           - const: img,img-rogue
+       - items:
+           - enum:
++              - allwinner,sun60i-a733-gpu
+               - thead,th1520-gpu
+           - const: img,img-bxm-4-64
+           - const: img,img-rogue
+-- 
+2.30.2
+

@@ -1,0 +1,47 @@
+From c00d113ad911d28e81f7140ea21fa3175f8d71b3 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Sat, 5 Sep 2026 09:02:57 +0200
+Subject: [PATCH 207/211] drm/imagination: Force a hard reset when the GPU will
+ not idle
+
+A hard reset is what the driver reaches for once the firmware has
+stopped answering, which after a real lockup usually means some unit is
+wedged and the idle polls in pvr_fw_stop() time out. Treating that as
+fatal marks the device lost with the core still powered and running, so
+whatever it was doing keeps going into memory user space is about to
+free. Two SoC hangs on the Cubie A7A followed exactly this sequence.
+
+The power-off that comes next asserts the bus reset and gates the
+clocks, which resets the core no matter what state it is in. Warn and
+carry on with that instead of giving up.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ drivers/gpu/drm/imagination/pvr_power.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/drivers/gpu/drm/imagination/pvr_power.c b/drivers/gpu/drm/imagination/pvr_power.c
+index e7a8a89a0fd..3610325417d 100644
+--- a/drivers/gpu/drm/imagination/pvr_power.c
++++ b/drivers/gpu/drm/imagination/pvr_power.c
+@@ -550,6 +550,17 @@ pvr_power_reset(struct pvr_device *pvr_dev, bool hard_reset)
+ 		}
+ 
+ 		err = pvr_power_fw_disable(pvr_dev, hard_reset, false);
++		if (err && hard_reset) {
++			/*
++			 * A locked-up core never reports idle. Powering it off
++			 * below resets the whole thing, so carry on.
++			 */
++			drm_warn(from_pvr_device(pvr_dev),
++				 "GPU did not go idle for reset (%d), forcing it off\n",
++				 err);
++			err = 0;
++		}
++
+ 		if (!err) {
+ 			if (hard_reset) {
+ 				WRITE_ONCE(pvr_dev->fw_dev.initialised, false);
+-- 
+2.30.2
+

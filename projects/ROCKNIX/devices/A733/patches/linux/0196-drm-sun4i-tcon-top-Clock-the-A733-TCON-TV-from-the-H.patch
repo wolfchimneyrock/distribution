@@ -1,0 +1,73 @@
+From d4f3d3b23c9e4199dd11b453ec88dd89e1d5356c Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Sat, 5 Sep 2026 01:35:36 +0200
+Subject: [PATCH 196/211] drm/sun4i: tcon-top: Clock the A733 TCON TV from the
+ HDMI PHY
+
+The pixel clock and the transmit clock have to come from the same PLL, or
+the two sides of the link drift apart. The HDMI PHY has a PLL of its own
+and the register defaults route it to the timing controller, so leave the
+whole setup register at zero rather than switching the controller to the
+CCU.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ drivers/gpu/drm/sun4i/sun8i_tcon_top.c | 8 ++++----
+ drivers/gpu/drm/sun4i/sun8i_tcon_top.h | 7 ++++---
+ 2 files changed, 8 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/gpu/drm/sun4i/sun8i_tcon_top.c b/drivers/gpu/drm/sun4i/sun8i_tcon_top.c
+index c6b3fba2df3..770330c0662 100644
+--- a/drivers/gpu/drm/sun4i/sun8i_tcon_top.c
++++ b/drivers/gpu/drm/sun4i/sun8i_tcon_top.c
+@@ -25,7 +25,7 @@ struct sun8i_tcon_top_quirks {
+ 	 */
+ 	bool has_port_sel;
+ 	bool has_clk_outputs;
+-	bool tv_clk_from_ccu;
++	bool tv_clk_from_phy;
+ };
+ 
+ static bool sun8i_tcon_top_node_is_tcon_top(struct device_node *node)
+@@ -243,8 +243,8 @@ static int sun8i_tcon_top_bind(struct device *dev, struct device *master,
+ 		writel(0, regs + TCON_TOP_PORT_SEL_REG);
+ 	writel(0, regs + TCON_TOP_GATE_SRC_REG);
+ 
+-	if (quirks->tv_clk_from_ccu) {
+-		writel(SUN60I_A733_TCON_TOP_TV0_FROM_CCU,
++	if (quirks->tv_clk_from_phy) {
++		writel(SUN60I_A733_TCON_TOP_TV_SETUP_HDMI,
+ 		       regs + TCON_TOP_TCON_TV_SETUP_REG);
+ 		/*
+ 		 * The TCON TV clock arrives from the CCU, so this gate is not
+@@ -369,7 +369,7 @@ static const struct sun8i_tcon_top_quirks sun50i_h616_tcon_top_quirks = {
+ };
+ 
+ static const struct sun8i_tcon_top_quirks sun60i_a733_tcon_top_quirks = {
+-	.tv_clk_from_ccu = true,
++	.tv_clk_from_phy = true,
+ };
+ 
+ /* sun4i_drv uses this list to check if a device node is a TCON TOP */
+diff --git a/drivers/gpu/drm/sun4i/sun8i_tcon_top.h b/drivers/gpu/drm/sun4i/sun8i_tcon_top.h
+index d5c3b817f90..d1c999322fc 100644
+--- a/drivers/gpu/drm/sun4i/sun8i_tcon_top.h
++++ b/drivers/gpu/drm/sun4i/sun8i_tcon_top.h
+@@ -12,10 +12,11 @@
+ #define TCON_TOP_TCON_TV_SETUP_REG	0x00
+ /*
+  * On the A733 generation this register picks where each TCON TV takes its
+- * pixel clock from. Everything we drive wants the CCU rather than the HDMI
+- * PHY, and HDMI rather than eDP, which is all zeroes except for this bit.
++ * pixel clock from. Taking it from the HDMI PHY keeps the pixel and transmit
++ * clocks on one PLL, and HDMI rather than eDP is what we drive, so every
++ * field here wants to be zero.
+  */
+-#define SUN60I_A733_TCON_TOP_TV0_FROM_CCU	BIT(3)
++#define SUN60I_A733_TCON_TOP_TV_SETUP_HDMI	0
+ 
+ #define TCON_TOP_PORT_SEL_REG		0x1C
+ #define TCON_TOP_PORT_DE0_MSK			GENMASK(1, 0)
+-- 
+2.30.2
+

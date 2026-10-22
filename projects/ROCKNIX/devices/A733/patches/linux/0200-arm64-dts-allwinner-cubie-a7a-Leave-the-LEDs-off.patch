@@ -1,0 +1,35 @@
+From 955c62f8eb61a25d0f0d12b11fd78388bff1a3ef Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Sat, 5 Sep 2026 05:58:21 +0200
+Subject: [PATCH 200/211] arm64: dts: allwinner: cubie-a7a: Leave the LEDs off
+
+Neither the power LED nor the heartbeat needs to be lit out of the box;
+leave both dark and let userspace decide.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ arch/arm64/boot/dts/allwinner/sun60i-a733-cubie-a7a.dts | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/allwinner/sun60i-a733-cubie-a7a.dts b/arch/arm64/boot/dts/allwinner/sun60i-a733-cubie-a7a.dts
+index 7751b544c3e..d9fcbddf389 100644
+--- a/arch/arm64/boot/dts/allwinner/sun60i-a733-cubie-a7a.dts
++++ b/arch/arm64/boot/dts/allwinner/sun60i-a733-cubie-a7a.dts
+@@ -50,14 +50,12 @@ led-0 {
+ 			function = LED_FUNCTION_POWER;
+ 			color = <LED_COLOR_ID_GREEN>;
+ 			gpios = <&pio 9 26 GPIO_ACTIVE_HIGH>; /* PJ26 */
+-			default-state = "on";
+ 		};
+ 
+ 		led-1 {
+ 			function = LED_FUNCTION_HEARTBEAT;
+ 			color = <LED_COLOR_ID_BLUE>;
+ 			gpios = <&pio 9 27 GPIO_ACTIVE_HIGH>; /* PJ27 */
+-			linux,default-trigger = "heartbeat";
+ 		};
+ 	};
+ 
+-- 
+2.30.2
+

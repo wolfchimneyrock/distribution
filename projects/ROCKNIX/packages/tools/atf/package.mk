@@ -20,13 +20,23 @@ case ${DEVICE} in
     # BL31 embeds the stubs; rebuild when they change
     PKG_NEED_UNPACK+=" $(get_pkg_directory h700-suspend-stub) ${SYSROOT_PREFIX}/usr/share/h700-suspend-stub"
   ;;
+  A733)
+    # TF-A master (2.15 dev) + the A733 series from github.com/DockSeed/a7s-build
+    # (bootchain/patches/tf-a), as in its board-tested chain.
+    PKG_VERSION="3d425f4f459820a44d24b23464dbc09d6baab7bb"
+    PKG_SHA256="37db9318f173919af92cc0134ae637434e1b302086b6a6d5b7363b2812ece9e7"
+  ;;
   *)
     PKG_VERSION="2.10.0"
     PKG_SHA256="6b1d5e89c311c5e7eaeb062713953311464c0378ab3e4ebc7ede72a746964bb1"
     ;;
 esac
 
-PKG_URL="https://github.com/TrustedFirmware-A/trusted-firmware-a/archive/v${PKG_VERSION}.tar.gz"
+if [ "${DEVICE}" = "A733" ]; then
+  PKG_URL="https://github.com/TrustedFirmware-A/trusted-firmware-a/archive/${PKG_VERSION}.tar.gz"
+else
+  PKG_URL="https://github.com/TrustedFirmware-A/trusted-firmware-a/archive/v${PKG_VERSION}.tar.gz"
+fi
 
 
 [ -n "${KERNEL_TOOLCHAIN}" ] && PKG_DEPENDS_TARGET+=" gcc-${KERNEL_TOOLCHAIN}:host"

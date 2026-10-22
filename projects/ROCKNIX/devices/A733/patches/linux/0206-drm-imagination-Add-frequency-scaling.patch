@@ -1,0 +1,514 @@
+From e909b5426261b87623a3972fe5936f8134e85cd9 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Sat, 5 Sep 2026 06:22:32 +0200
+Subject: [PATCH 206/211] drm/imagination: Add frequency scaling
+
+Scale the core clock and its supply with load the way panfrost does: a
+devfreq device driven by the simple_ondemand governor, fed by how long at
+least one job has been in flight. Jobs already take a power reference for
+exactly that span, so the accounting hangs off that. The device also
+registers as a cooling device, so a thermal zone can hold it back.
+
+The firmware keeps its own copy of the core clock for its timers. After
+every change write the new rate into the runtime configuration, which it
+reads on each boot, and tell a running firmware directly with the clock
+speed change command, the same handshake the vendor driver performs.
+
+Everything is keyed off an operating points table in the device tree;
+without one nothing changes.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ drivers/gpu/drm/imagination/Kconfig       |   2 +
+ drivers/gpu/drm/imagination/Makefile      |   1 +
+ drivers/gpu/drm/imagination/pvr_devfreq.c | 270 ++++++++++++++++++++++
+ drivers/gpu/drm/imagination/pvr_devfreq.h |  59 +++++
+ drivers/gpu/drm/imagination/pvr_device.h  |   4 +
+ drivers/gpu/drm/imagination/pvr_drv.c     |  10 +-
+ drivers/gpu/drm/imagination/pvr_job.h     |   6 +-
+ drivers/gpu/drm/imagination/pvr_power.c   |   4 +
+ 8 files changed, 354 insertions(+), 2 deletions(-)
+ create mode 100644 drivers/gpu/drm/imagination/pvr_devfreq.c
+ create mode 100644 drivers/gpu/drm/imagination/pvr_devfreq.h
+
+diff --git a/drivers/gpu/drm/imagination/Kconfig b/drivers/gpu/drm/imagination/Kconfig
+index 1fd4c635c2c..c78803488ef 100644
+--- a/drivers/gpu/drm/imagination/Kconfig
++++ b/drivers/gpu/drm/imagination/Kconfig
+@@ -13,6 +13,8 @@ config DRM_POWERVR
+ 	select DRM_SCHED
+ 	select DRM_GPUVM
+ 	select FW_LOADER
++	select PM_DEVFREQ
++	select DEVFREQ_GOV_SIMPLE_ONDEMAND
+ 	help
+ 	  Choose this option if you have a system that has an Imagination
+ 	  Technologies PowerVR (Series 6 or later) or IMG GPU.
+diff --git a/drivers/gpu/drm/imagination/Makefile b/drivers/gpu/drm/imagination/Makefile
+index a5c5e386f16..a3520b48a33 100644
+--- a/drivers/gpu/drm/imagination/Makefile
++++ b/drivers/gpu/drm/imagination/Makefile
+@@ -7,6 +7,7 @@ powervr-y := \
+ 	pvr_context.o \
+ 	pvr_device.o \
+ 	pvr_device_info.o \
++	pvr_devfreq.o \
+ 	pvr_drv.o \
+ 	pvr_dump.o \
+ 	pvr_free_list.o \
+diff --git a/drivers/gpu/drm/imagination/pvr_devfreq.c b/drivers/gpu/drm/imagination/pvr_devfreq.c
+new file mode 100644
+index 00000000000..836a047c937
+--- /dev/null
++++ b/drivers/gpu/drm/imagination/pvr_devfreq.c
+@@ -0,0 +1,270 @@
++// SPDX-License-Identifier: GPL-2.0-only OR MIT
++/* Copyright (c) 2026 Jernej Skrabec <jernej.skrabec@gmail.com> */
++
++#include "pvr_ccb.h"
++#include "pvr_devfreq.h"
++#include "pvr_device.h"
++#include "pvr_fw.h"
++#include "pvr_power.h"
++#include "pvr_rogue_fwif.h"
++
++#include <drm/drm_device.h>
++#include <drm/drm_print.h>
++
++#include <linux/clk.h>
++#include <linux/devfreq.h>
++#include <linux/devfreq_cooling.h>
++#include <linux/pm_opp.h>
++#include <linux/pm_runtime.h>
++#include <linux/thermal.h>
++
++static void pvr_devfreq_update_utilization(struct pvr_devfreq *df)
++{
++	ktime_t now = ktime_get();
++	ktime_t last = df->time_last_update;
++
++	if (df->busy_count > 0)
++		df->busy_time += ktime_sub(now, last);
++	else
++		df->idle_time += ktime_sub(now, last);
++
++	df->time_last_update = now;
++}
++
++static void pvr_devfreq_reset(struct pvr_devfreq *df)
++{
++	df->busy_time = 0;
++	df->idle_time = 0;
++	df->time_last_update = ktime_get();
++}
++
++/*
++ * The firmware keeps its own idea of the core clock for its timers, so tell
++ * it whenever the rate moves. The runtime configuration is what it reads on
++ * every boot; the command is only for a firmware that is up right now.
++ */
++static void pvr_devfreq_notify_fw(struct pvr_device *pvr_dev)
++{
++	struct drm_device *drm_dev = from_pvr_device(pvr_dev);
++	struct pvr_fw_device *fw_dev = &pvr_dev->fw_dev;
++	struct rogue_fwif_runtime_cfg *runtime_cfg;
++	struct rogue_fwif_kccb_cmd cmd;
++	u32 clock_speed_hz;
++
++	if (!READ_ONCE(fw_dev->initialised) || pvr_dev->lost)
++		return;
++
++	clock_speed_hz = clk_get_rate(pvr_dev->core_clk);
++
++	runtime_cfg = pvr_fw_object_vmap(fw_dev->mem.runtime_cfg_obj);
++	if (IS_ERR(runtime_cfg))
++		return;
++
++	WRITE_ONCE(runtime_cfg->core_clock_speed, clock_speed_hz);
++	pvr_fw_object_vunmap(fw_dev->mem.runtime_cfg_obj);
++
++	if (pm_runtime_get_if_active(drm_dev->dev) <= 0)
++		return;
++
++	cmd.cmd_type = ROGUE_FWIF_KCCB_CMD_CORECLKSPEEDCHANGE;
++	cmd.kccb_flags = 0;
++	cmd.cmd_data.core_clk_speed_change_data.new_clock_speed = clock_speed_hz;
++
++	if (pvr_kccb_send_cmd_powered(pvr_dev, &cmd, NULL))
++		drm_warn(drm_dev, "Firmware missed the clock change to %u Hz\n",
++			 clock_speed_hz);
++
++	pm_runtime_put(drm_dev->dev);
++}
++
++static int pvr_devfreq_target(struct device *dev, unsigned long *freq, u32 flags)
++{
++	struct drm_device *drm_dev = dev_get_drvdata(dev);
++	struct pvr_device *pvr_dev = to_pvr_device(drm_dev);
++	struct dev_pm_opp *opp;
++	int err;
++
++	opp = devfreq_recommended_opp(dev, freq, flags);
++	if (IS_ERR(opp))
++		return PTR_ERR(opp);
++	dev_pm_opp_put(opp);
++
++	err = dev_pm_opp_set_rate(dev, *freq);
++	if (err)
++		return err;
++
++	pvr_dev->devfreq.current_frequency = *freq;
++	pvr_devfreq_notify_fw(pvr_dev);
++
++	return 0;
++}
++
++static int pvr_devfreq_get_dev_status(struct device *dev,
++				      struct devfreq_dev_status *status)
++{
++	struct drm_device *drm_dev = dev_get_drvdata(dev);
++	struct pvr_device *pvr_dev = to_pvr_device(drm_dev);
++	struct pvr_devfreq *df = &pvr_dev->devfreq;
++	unsigned long irqflags;
++
++	status->current_frequency = clk_get_rate(pvr_dev->core_clk);
++
++	spin_lock_irqsave(&df->lock, irqflags);
++
++	pvr_devfreq_update_utilization(df);
++
++	status->total_time = ktime_to_ns(ktime_add(df->busy_time, df->idle_time));
++	status->busy_time = ktime_to_ns(df->busy_time);
++
++	pvr_devfreq_reset(df);
++
++	spin_unlock_irqrestore(&df->lock, irqflags);
++
++	return 0;
++}
++
++static struct devfreq_dev_profile pvr_devfreq_profile = {
++	.timer = DEVFREQ_TIMER_DELAYED,
++	.polling_ms = 50, /* about three frames */
++	.target = pvr_devfreq_target,
++	.get_dev_status = pvr_devfreq_get_dev_status,
++};
++
++static const char * const pvr_devfreq_supplies[] = { "power", NULL };
++
++/**
++ * pvr_devfreq_init() - Set up frequency scaling for a device
++ * @pvr_dev: Target PowerVR device.
++ *
++ * Scaling is only used when the device tree carries an operating points
++ * table. Without one this is a no-op and the clocks stay where firmware left
++ * them.
++ *
++ * Returns:
++ *  * 0 on success, or
++ *  * Any error returned by the OPP or devfreq cores.
++ */
++int pvr_devfreq_init(struct pvr_device *pvr_dev)
++{
++	struct drm_device *drm_dev = from_pvr_device(pvr_dev);
++	struct device *dev = drm_dev->dev;
++	struct pvr_devfreq *df = &pvr_dev->devfreq;
++	struct thermal_cooling_device *cooling;
++	struct devfreq *devfreq;
++	struct dev_pm_opp *opp;
++	unsigned long cur_freq;
++	int err;
++
++	err = devm_pm_opp_set_regulators(dev, pvr_devfreq_supplies);
++	if (err && err != -ENODEV)
++		return dev_err_probe(dev, err, "Couldn't set OPP regulators\n");
++
++	err = devm_pm_opp_of_add_table(dev);
++	if (err == -ENODEV)
++		return 0;
++	if (err)
++		return dev_err_probe(dev, err, "Couldn't add OPP table\n");
++
++	spin_lock_init(&df->lock);
++	pvr_devfreq_reset(df);
++
++	cur_freq = clk_get_rate(pvr_dev->core_clk);
++
++	opp = devfreq_recommended_opp(dev, &cur_freq, 0);
++	if (IS_ERR(opp))
++		return PTR_ERR(opp);
++
++	pvr_devfreq_profile.initial_freq = cur_freq;
++	df->current_frequency = cur_freq;
++
++	/*
++	 * Land on a real operating point right away, so the supply matches
++	 * the clock before the first job runs.
++	 */
++	err = dev_pm_opp_set_opp(dev, opp);
++	dev_pm_opp_put(opp);
++	if (err)
++		return dev_err_probe(dev, err, "Couldn't set initial OPP\n");
++
++	pvr_devfreq_notify_fw(pvr_dev);
++
++	/* The same thresholds panfrost settled on for rendering loads. */
++	df->gov_data.upthreshold = 45;
++	df->gov_data.downdifferential = 5;
++
++	devfreq = devm_devfreq_add_device(dev, &pvr_devfreq_profile,
++					  DEVFREQ_GOV_SIMPLE_ONDEMAND,
++					  &df->gov_data);
++	if (IS_ERR(devfreq))
++		return dev_err_probe(dev, PTR_ERR(devfreq),
++				     "Couldn't add devfreq device\n");
++
++	df->devfreq = devfreq;
++
++	cooling = of_devfreq_cooling_register(dev->of_node, devfreq);
++	if (IS_ERR(cooling))
++		drm_info(drm_dev, "Running without a GPU cooling device\n");
++	else
++		df->cooling = cooling;
++
++	return 0;
++}
++
++void pvr_devfreq_fini(struct pvr_device *pvr_dev)
++{
++	struct pvr_devfreq *df = &pvr_dev->devfreq;
++
++	if (df->cooling) {
++		devfreq_cooling_unregister(df->cooling);
++		df->cooling = NULL;
++	}
++}
++
++void pvr_devfreq_resume(struct pvr_device *pvr_dev)
++{
++	struct pvr_devfreq *df = &pvr_dev->devfreq;
++
++	if (!df->devfreq)
++		return;
++
++	pvr_devfreq_reset(df);
++	devfreq_resume_device(df->devfreq);
++}
++
++void pvr_devfreq_suspend(struct pvr_device *pvr_dev)
++{
++	struct pvr_devfreq *df = &pvr_dev->devfreq;
++
++	if (!df->devfreq)
++		return;
++
++	devfreq_suspend_device(df->devfreq);
++}
++
++void pvr_devfreq_record_busy(struct pvr_device *pvr_dev)
++{
++	struct pvr_devfreq *df = &pvr_dev->devfreq;
++	unsigned long irqflags;
++
++	if (!df->devfreq)
++		return;
++
++	spin_lock_irqsave(&df->lock, irqflags);
++	pvr_devfreq_update_utilization(df);
++	df->busy_count++;
++	spin_unlock_irqrestore(&df->lock, irqflags);
++}
++
++void pvr_devfreq_record_idle(struct pvr_device *pvr_dev)
++{
++	struct pvr_devfreq *df = &pvr_dev->devfreq;
++	unsigned long irqflags;
++
++	if (!df->devfreq)
++		return;
++
++	spin_lock_irqsave(&df->lock, irqflags);
++	pvr_devfreq_update_utilization(df);
++	WARN_ON(--df->busy_count < 0);
++	spin_unlock_irqrestore(&df->lock, irqflags);
++}
+diff --git a/drivers/gpu/drm/imagination/pvr_devfreq.h b/drivers/gpu/drm/imagination/pvr_devfreq.h
+new file mode 100644
+index 00000000000..2384a4b7206
+--- /dev/null
++++ b/drivers/gpu/drm/imagination/pvr_devfreq.h
+@@ -0,0 +1,59 @@
++/* SPDX-License-Identifier: GPL-2.0-only OR MIT */
++/* Copyright (c) 2026 Jernej Skrabec <jernej.skrabec@gmail.com> */
++
++#ifndef PVR_DEVFREQ_H
++#define PVR_DEVFREQ_H
++
++#include <linux/devfreq.h>
++#include <linux/ktime.h>
++#include <linux/spinlock.h>
++
++struct devfreq;
++struct pvr_device;
++struct thermal_cooling_device;
++
++/**
++ * struct pvr_devfreq - Frequency scaling state for a PowerVR device.
++ */
++struct pvr_devfreq {
++	/** @devfreq: The devfreq device, or %NULL when scaling is not in use. */
++	struct devfreq *devfreq;
++
++	/** @cooling: Cooling device throttling us, or %NULL. */
++	struct thermal_cooling_device *cooling;
++
++	/** @gov_data: Thresholds for the simple_ondemand governor. */
++	struct devfreq_simple_ondemand_data gov_data;
++
++	/** @current_frequency: Rate last requested through the OPP table. */
++	unsigned long current_frequency;
++
++	/** @busy_time: Time spent with at least one job in flight. */
++	ktime_t busy_time;
++
++	/** @idle_time: Time spent with nothing in flight. */
++	ktime_t idle_time;
++
++	/** @time_last_update: When @busy_time and @idle_time were last advanced. */
++	ktime_t time_last_update;
++
++	/** @busy_count: Number of jobs currently in flight. */
++	int busy_count;
++
++	/**
++	 * @lock: Protects @busy_time, @idle_time, @time_last_update and
++	 * @busy_count, which jobs on every queue update.
++	 */
++	spinlock_t lock;
++};
++
++int pvr_devfreq_init(struct pvr_device *pvr_dev);
++void pvr_devfreq_fini(struct pvr_device *pvr_dev);
++
++void pvr_devfreq_resume(struct pvr_device *pvr_dev);
++void pvr_devfreq_suspend(struct pvr_device *pvr_dev);
++
++void pvr_devfreq_record_busy(struct pvr_device *pvr_dev);
++void pvr_devfreq_record_idle(struct pvr_device *pvr_dev);
++
++#endif /* PVR_DEVFREQ_H */
+diff --git a/drivers/gpu/drm/imagination/pvr_device.h b/drivers/gpu/drm/imagination/pvr_device.h
+index d51c57cf933..e33b144ccb6 100644
+--- a/drivers/gpu/drm/imagination/pvr_device.h
++++ b/drivers/gpu/drm/imagination/pvr_device.h
+@@ -5,6 +5,7 @@
+ #define PVR_DEVICE_H
+ 
+ #include "pvr_ccb.h"
++#include "pvr_devfreq.h"
+ #include "pvr_device_info.h"
+ #include "pvr_fw.h"
+ #include "pvr_rogue_fwif_stream.h"
+@@ -173,6 +174,9 @@ struct pvr_device {
+ 	/** @pwrseq: Pointer to a power sequencer, if one is used. */
+ 	struct pwrseq_desc *pwrseq;
+ 
++	/** @devfreq: Frequency scaling state. */
++	struct pvr_devfreq devfreq;
++
+ 	/** @irq: IRQ number. */
+ 	int irq;
+ 
+diff --git a/drivers/gpu/drm/imagination/pvr_drv.c b/drivers/gpu/drm/imagination/pvr_drv.c
+index 5c965ef0274..40c9682926b 100644
+--- a/drivers/gpu/drm/imagination/pvr_drv.c
++++ b/drivers/gpu/drm/imagination/pvr_drv.c
+@@ -1439,15 +1439,22 @@ pvr_probe(struct platform_device *plat_dev)
+ 	if (err)
+ 		goto err_watchdog_fini;
+ 
+-	err = drm_dev_register(drm_dev, 0);
++	err = pvr_devfreq_init(pvr_dev);
+ 	if (err)
+ 		goto err_device_fini;
+ 
++	err = drm_dev_register(drm_dev, 0);
++	if (err)
++		goto err_devfreq_fini;
++
+ 	xa_init_flags(&pvr_dev->free_list_ids, XA_FLAGS_ALLOC1);
+ 	xa_init_flags(&pvr_dev->job_ids, XA_FLAGS_ALLOC1);
+ 
+ 	return 0;
+ 
++err_devfreq_fini:
++	pvr_devfreq_fini(pvr_dev);
++
+ err_device_fini:
+ 	pvr_device_fini(pvr_dev);
+ 
+@@ -1476,6 +1483,7 @@ static void pvr_remove(struct platform_device *plat_dev)
+ 	xa_destroy(&pvr_dev->free_list_ids);
+ 
+ 	pm_runtime_suspend(drm_dev->dev);
++	pvr_devfreq_fini(pvr_dev);
+ 	pvr_device_fini(pvr_dev);
+ 	drm_dev_unplug(drm_dev);
+ 	pvr_watchdog_fini(pvr_dev);
+diff --git a/drivers/gpu/drm/imagination/pvr_job.h b/drivers/gpu/drm/imagination/pvr_job.h
+index 0ca003c5c47..a27ca803ba5 100644
+--- a/drivers/gpu/drm/imagination/pvr_job.h
++++ b/drivers/gpu/drm/imagination/pvr_job.h
+@@ -12,6 +12,7 @@
+ #include <drm/drm_gem.h>
+ #include <drm/gpu_scheduler.h>
+ 
++#include "pvr_devfreq.h"
+ #include "pvr_power.h"
+ 
+ /* Forward declaration from "pvr_context.h". */
+@@ -119,6 +120,7 @@ static __always_inline void
+ pvr_job_release_pm_ref(struct pvr_job *job)
+ {
+ 	if (job->has_pm_ref) {
++		pvr_devfreq_record_idle(job->pvr_dev);
+ 		pvr_power_put(job->pvr_dev);
+ 		job->has_pm_ref = false;
+ 	}
+@@ -141,8 +143,10 @@ pvr_job_get_pm_ref(struct pvr_job *job)
+ 		return 0;
+ 
+ 	err = pvr_power_get(job->pvr_dev);
+-	if (!err)
++	if (!err) {
+ 		job->has_pm_ref = true;
++		pvr_devfreq_record_busy(job->pvr_dev);
++	}
+ 
+ 	return err;
+ }
+diff --git a/drivers/gpu/drm/imagination/pvr_power.c b/drivers/gpu/drm/imagination/pvr_power.c
+index eb4b6ecdf4f..e7a8a89a0fd 100644
+--- a/drivers/gpu/drm/imagination/pvr_power.c
++++ b/drivers/gpu/drm/imagination/pvr_power.c
+@@ -384,6 +384,8 @@ pvr_power_device_suspend(struct device *dev)
+ 			goto err_drm_dev_exit;
+ 	}
+ 
++	pvr_devfreq_suspend(pvr_dev);
++
+ 	err = pvr_dev->device_data->pwr_ops->power_off(pvr_dev);
+ 
+ err_drm_dev_exit:
+@@ -414,6 +416,8 @@ pvr_power_device_resume(struct device *dev)
+ 			goto err_power_off;
+ 	}
+ 
++	pvr_devfreq_resume(pvr_dev);
++
+ 	drm_dev_exit(idx);
+ 
+ 	return 0;
+-- 
+2.30.2
+

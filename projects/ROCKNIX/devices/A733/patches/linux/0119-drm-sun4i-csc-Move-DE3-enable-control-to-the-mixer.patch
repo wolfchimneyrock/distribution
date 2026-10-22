@@ -1,0 +1,92 @@
+From df5004ecfb91ccb4210ac76a53eaa1d8712cd341 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Sat, 14 Mar 2026 20:37:20 +0100
+Subject: [PATCH 119/211] drm/sun4i: csc: Move DE3 enable control to the mixer
+
+DE3 exposes the CSC enable bits in the blender register block, so the
+mixer should own them. Keeping the control in the CSC helper also
+requires unreliable read-modify-write accesses to DE registers.
+
+Enable every CSC unit from the mixer and let each unit's coefficients
+select bypass or conversion, matching the vendor driver.
+
+Fixes: c50519e6db4d ("drm/sun4i: Add basic support for DE3")
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ drivers/gpu/drm/sun4i/sun8i_csc.c   | 11 ++---------
+ drivers/gpu/drm/sun4i/sun8i_mixer.c | 14 ++++++++++++++
+ 2 files changed, 16 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/gpu/drm/sun4i/sun8i_csc.c b/drivers/gpu/drm/sun4i/sun8i_csc.c
+index 70fc9b017d1..5aa828610e5 100644
+--- a/drivers/gpu/drm/sun4i/sun8i_csc.c
++++ b/drivers/gpu/drm/sun4i/sun8i_csc.c
+@@ -162,24 +162,21 @@ static void sun8i_de3_ccsc_setup(struct regmap *map, int layer,
+ 				 enum drm_color_encoding encoding,
+ 				 enum drm_color_range range)
+ {
+-	u32 addr, val, mask;
+ 	const u32 *table;
++	u32 addr;
+ 	int i;
+ 
+-	mask = SUN50I_MIXER_BLEND_CSC_CTL_EN(layer);
+ 	table = yuv2rgb_de3[range][encoding];
+ 
+ 	switch (mode) {
+ 	case SUN8I_CSC_MODE_OFF:
+-		val = 0;
++		/* nothing to do */
+ 		break;
+ 	case SUN8I_CSC_MODE_YUV2RGB:
+-		val = mask;
+ 		addr = SUN50I_MIXER_BLEND_CSC_COEFF(DE3_BLD_BASE, layer, 0);
+ 		regmap_bulk_write(map, addr, table, 12);
+ 		break;
+ 	case SUN8I_CSC_MODE_YVU2RGB:
+-		val = mask;
+ 		for (i = 0; i < 12; i++) {
+ 			if ((i & 3) == 1)
+ 				addr = SUN50I_MIXER_BLEND_CSC_COEFF(DE3_BLD_BASE,
+@@ -196,13 +193,9 @@ static void sun8i_de3_ccsc_setup(struct regmap *map, int layer,
+ 		}
+ 		break;
+ 	default:
+-		val = 0;
+ 		DRM_WARN("Wrong CSC mode specified.\n");
+ 		return;
+ 	}
+-
+-	regmap_update_bits(map, SUN50I_MIXER_BLEND_CSC_CTL(DE3_BLD_BASE),
+-			   mask, val);
+ }
+ 
+ /* extract constant from high word and invert sign if necessary */
+diff --git a/drivers/gpu/drm/sun4i/sun8i_mixer.c b/drivers/gpu/drm/sun4i/sun8i_mixer.c
+index e08b491cce3..6682bf3fafc 100644
+--- a/drivers/gpu/drm/sun4i/sun8i_mixer.c
++++ b/drivers/gpu/drm/sun4i/sun8i_mixer.c
+@@ -509,6 +509,20 @@ static void sun8i_mixer_init(struct sun8i_mixer *mixer)
+ 		regmap_write(mixer->engine.regs,
+ 			     SUN8I_MIXER_BLEND_MODE(base, i),
+ 			     SUN8I_MIXER_BLEND_MODE_DEF);
++
++	/*
++	 * Enable all CSC units by default, same as in vendor driver. It
++	 * would be tricky to do it without read-modify-write mechanism,
++	 * which is not safe on DE2 and newer. Having it enabled all the
++	 * time doesn't have negative effects.
++	 */
++	if (mixer->cfg->de_type == SUN8I_MIXER_DE3)
++		regmap_write(mixer->engine.regs,
++			     SUN50I_MIXER_BLEND_CSC_CTL(DE3_BLD_BASE),
++			     SUN50I_MIXER_BLEND_CSC_CTL_EN(0) |
++			     SUN50I_MIXER_BLEND_CSC_CTL_EN(1) |
++			     SUN50I_MIXER_BLEND_CSC_CTL_EN(2) |
++			     SUN50I_MIXER_BLEND_CSC_CTL_EN(3));
+ }
+ 
+ static int sun8i_mixer_bind(struct device *dev, struct device *master,
+-- 
+2.30.2
+

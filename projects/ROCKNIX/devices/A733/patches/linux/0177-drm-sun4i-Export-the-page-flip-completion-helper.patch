@@ -1,0 +1,29 @@
+From b77c8a7e0f1fa6190b19a4b2f152d56e867dd66a Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Fri, 4 Sep 2026 13:37:11 +0200
+Subject: [PATCH 177/211] drm/sun4i: Export the page flip completion helper
+
+The writeback support lives in the mixer module and finishes page flips
+itself when it drives the timing, so the helper has to be reachable from
+outside the main module.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ drivers/gpu/drm/sun4i/sun4i_crtc.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/gpu/drm/sun4i/sun4i_crtc.c b/drivers/gpu/drm/sun4i/sun4i_crtc.c
+index c6b2f43410a..3a877fb1b80 100644
+--- a/drivers/gpu/drm/sun4i/sun4i_crtc.c
++++ b/drivers/gpu/drm/sun4i/sun4i_crtc.c
+@@ -63,6 +63,7 @@ void sun4i_crtc_finish_page_flip(struct drm_crtc *crtc)
+ 	}
+ 	spin_unlock_irqrestore(&crtc->dev->event_lock, flags);
+ }
++EXPORT_SYMBOL_GPL(sun4i_crtc_finish_page_flip);
+ 
+ static int sun4i_crtc_atomic_check(struct drm_crtc *crtc,
+ 				    struct drm_atomic_commit *state)
+-- 
+2.30.2
+

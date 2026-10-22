@@ -1,0 +1,50 @@
+From 3ad9825784db8410f9ea70bb7d6661456cdb6189 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Thu, 3 Sep 2026 22:21:39 +0200
+Subject: [PATCH 085/211] arm64: dts: allwinner: a733: fall back to the A523
+ MMC controller
+
+With the D1 fallback the driver left the new timing mode's clock phases at
+their reset values, and an SD card at 50 MHz suffered data errors every
+few minutes until the file system gave up. The A733 controllers are the
+A523 generation, which the driver knows the phases for.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ arch/arm64/boot/dts/allwinner/sun60i-a733.dtsi | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/allwinner/sun60i-a733.dtsi b/arch/arm64/boot/dts/allwinner/sun60i-a733.dtsi
+index b498441ed7f..ee9775c4bfa 100644
+--- a/arch/arm64/boot/dts/allwinner/sun60i-a733.dtsi
++++ b/arch/arm64/boot/dts/allwinner/sun60i-a733.dtsi
+@@ -578,7 +578,7 @@ gic: interrupt-controller@3400000 {
+ 
+ 		mmc0: mmc@4020000 {
+ 			compatible = "allwinner,sun60i-a733-mmc",
+-				     "allwinner,sun20i-d1-mmc";
++				     "allwinner,sun55i-a523-mmc";
+ 			reg = <0x04020000 0x1000>;
+ 			interrupts = <GIC_SPI 161 IRQ_TYPE_LEVEL_HIGH>;
+ 			clocks = <&ccu CLK_BUS_MMC0>, <&ccu CLK_MMC0>;
+@@ -596,7 +596,7 @@ mmc0: mmc@4020000 {
+ 
+ 		mmc1: mmc@4021000 {
+ 			compatible = "allwinner,sun60i-a733-mmc",
+-				     "allwinner,sun20i-d1-mmc";
++				     "allwinner,sun55i-a523-mmc";
+ 			reg = <0x04021000 0x1000>;
+ 			interrupts = <GIC_SPI 162 IRQ_TYPE_LEVEL_HIGH>;
+ 			clocks = <&ccu CLK_BUS_MMC1>, <&ccu CLK_MMC1>;
+@@ -613,7 +613,7 @@ mmc1: mmc@4021000 {
+ 
+ 		mmc2: mmc@4022000 {
+ 			compatible = "allwinner,sun60i-a733-mmc",
+-				     "allwinner,sun20i-d1-mmc";
++				     "allwinner,sun55i-a523-mmc";
+ 			reg = <0x04022000 0x1000>;
+ 			interrupts = <GIC_SPI 163 IRQ_TYPE_LEVEL_HIGH>;
+ 			clocks = <&ccu CLK_BUS_MMC2>, <&ccu CLK_MMC2>;
+-- 
+2.30.2
+

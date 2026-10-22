@@ -1,0 +1,42 @@
+From 273e7bd5221f7d199ac610ae426648e7348336a8 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Wed, 2 Sep 2026 22:12:09 +0200
+Subject: [PATCH 052/211] dt-bindings: usb: generic-ehci/ohci: add the
+ Allwinner A733
+
+The A733 host controllers are the same as on the A523, they just get
+their own compatible string as a fallback for future differences.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ Documentation/devicetree/bindings/usb/generic-ehci.yaml | 1 +
+ Documentation/devicetree/bindings/usb/generic-ohci.yaml | 1 +
+ 2 files changed, 2 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/usb/generic-ehci.yaml b/Documentation/devicetree/bindings/usb/generic-ehci.yaml
+index ae9fb70d021..6832f3665a8 100644
+--- a/Documentation/devicetree/bindings/usb/generic-ehci.yaml
++++ b/Documentation/devicetree/bindings/usb/generic-ehci.yaml
+@@ -20,6 +20,7 @@ properties:
+               - allwinner,sun50i-h6-ehci
+               - allwinner,sun50i-h616-ehci
+               - allwinner,sun55i-a523-ehci
++              - allwinner,sun60i-a733-ehci
+               - allwinner,sun5i-a13-ehci
+               - allwinner,sun6i-a31-ehci
+               - allwinner,sun7i-a20-ehci
+diff --git a/Documentation/devicetree/bindings/usb/generic-ohci.yaml b/Documentation/devicetree/bindings/usb/generic-ohci.yaml
+index 322808aaa28..4ae7077b3fe 100644
+--- a/Documentation/devicetree/bindings/usb/generic-ohci.yaml
++++ b/Documentation/devicetree/bindings/usb/generic-ohci.yaml
+@@ -20,6 +20,7 @@ properties:
+               - allwinner,sun50i-h6-ohci
+               - allwinner,sun50i-h616-ohci
+               - allwinner,sun55i-a523-ohci
++              - allwinner,sun60i-a733-ohci
+               - allwinner,sun5i-a13-ohci
+               - allwinner,sun6i-a31-ohci
+               - allwinner,sun7i-a20-ohci
+-- 
+2.30.2
+

@@ -1,0 +1,40 @@
+From 436994aa292e538ebe7ca83a4ff41feef2417ca0 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Fri, 4 Sep 2026 13:33:07 +0200
+Subject: [PATCH 176/211] drm/sun4i: dw-hdmi: Follow the current bridge and
+ encoder API
+
+Bridges no longer reset through atomic_reset, and the simple encoder
+helpers this file used are gone. Use the create_state hook and the managed
+encoder initialiser instead.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ drivers/gpu/drm/sun4i/sun8i_dw_hdmi.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/sun4i/sun8i_dw_hdmi.c b/drivers/gpu/drm/sun4i/sun8i_dw_hdmi.c
+index b13f3a9e1b8..249e9df8732 100644
+--- a/drivers/gpu/drm/sun4i/sun8i_dw_hdmi.c
++++ b/drivers/gpu/drm/sun4i/sun8i_dw_hdmi.c
+@@ -106,7 +106,7 @@ static const struct drm_bridge_funcs sun8i_hdmi_enc_bridge_funcs = {
+ 	.atomic_get_input_bus_fmts = sun8i_hdmi_enc_get_input_bus_fmts,
+ 	.atomic_duplicate_state = drm_atomic_helper_bridge_duplicate_state,
+ 	.atomic_destroy_state = drm_atomic_helper_bridge_destroy_state,
+-	.atomic_reset = drm_atomic_helper_bridge_reset,
++	.atomic_create_state = drm_atomic_helper_bridge_create_state,
+ };
+ 
+ static void
+@@ -332,7 +332,7 @@ static int sun8i_dw_hdmi_bind(struct device *dev, struct device *master,
+ 	}
+ 
+ 	drm_encoder_helper_add(encoder, &sun8i_dw_hdmi_encoder_helper_funcs);
+-	ret = drm_simple_encoder_init(drm, encoder, DRM_MODE_ENCODER_TMDS);
++	ret = drmm_encoder_init(drm, encoder, NULL, DRM_MODE_ENCODER_TMDS, NULL);
+ 	if (ret)
+ 		goto err_remove_dw_hdmi;
+ 
+-- 
+2.30.2
+

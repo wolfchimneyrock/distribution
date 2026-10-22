@@ -1,0 +1,29 @@
+From feccd12f8ee0465a65614792d862a0dff113cf93 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Thu, 3 Sep 2026 10:48:00 +0200
+Subject: [PATCH 072/211] dt-bindings: opp: add the Allwinner A733 operating
+ points
+
+The A733 selects its CPU voltage table from a code in the efuse, like
+the SoCs already covered by this binding.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ .../bindings/opp/allwinner,sun50i-h6-operating-points.yaml       | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Documentation/devicetree/bindings/opp/allwinner,sun50i-h6-operating-points.yaml b/Documentation/devicetree/bindings/opp/allwinner,sun50i-h6-operating-points.yaml
+index 75ab552f6ec..84d71862fdb 100644
+--- a/Documentation/devicetree/bindings/opp/allwinner,sun50i-h6-operating-points.yaml
++++ b/Documentation/devicetree/bindings/opp/allwinner,sun50i-h6-operating-points.yaml
+@@ -25,6 +25,7 @@ properties:
+       - allwinner,sun50i-a100-operating-points
+       - allwinner,sun50i-h6-operating-points
+       - allwinner,sun50i-h616-operating-points
++      - allwinner,sun60i-a733-operating-points
+ 
+   nvmem-cells:
+     description: |
+-- 
+2.30.2
+

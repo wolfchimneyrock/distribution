@@ -1,0 +1,67 @@
+From a28dce30807e39bc866196d61b6ad307dc114525 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Sat, 5 Sep 2026 05:40:53 +0200
+Subject: [PATCH 199/211] dt-bindings: display: sunxi: Describe the A733 HDMI
+ PHY clock
+
+The A733 PHY runs its PLL from the oscillator and hands it out for the
+timing controller to use, so it takes a third clock and is a clock
+provider itself.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ .../display/allwinner,sun8i-a83t-hdmi-phy.yaml      | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/display/allwinner,sun8i-a83t-hdmi-phy.yaml b/Documentation/devicetree/bindings/display/allwinner,sun8i-a83t-hdmi-phy.yaml
+index ec06728e15b..a825ad09d7d 100644
+--- a/Documentation/devicetree/bindings/display/allwinner,sun8i-a83t-hdmi-phy.yaml
++++ b/Documentation/devicetree/bindings/display/allwinner,sun8i-a83t-hdmi-phy.yaml
+@@ -46,6 +46,12 @@ properties:
+   power-domains:
+     maxItems: 1
+ 
++  "#clock-cells":
++    const: 0
++
++  clock-output-names:
++    maxItems: 1
++
+   resets:
+     maxItems: 1
+ 
+@@ -89,14 +95,17 @@ else:
+           enum:
+             - allwinner,sun8i-h3-hdmi-phy
+             - allwinner,sun50i-a64-hdmi-phy
++            - allwinner,sun60i-a733-hdmi-phy
+ 
+   then:
+     properties:
+       clocks:
+         minItems: 3
++        maxItems: 3
+ 
+       clock-names:
+         minItems: 3
++        maxItems: 3
+ 
+   else:
+     properties:
+@@ -115,9 +124,13 @@ allOf:
+     then:
+       required:
+         - syscon
++        - "#clock-cells"
++        - clock-output-names
+     else:
+       properties:
+         syscon: false
++        "#clock-cells": false
++        clock-output-names: false
+ 
+ additionalProperties: false
+ 
+-- 
+2.30.2
+

@@ -1,0 +1,92 @@
+From ecf5adae85d9d9c7d91c9ee294c0187b9db0c715 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Thu, 3 Sep 2026 10:48:00 +0200
+Subject: [PATCH 075/211] arm64: dts: allwinner: a733: cubie-a7a: enable CPU
+ DVFS
+
+DCDC5 feeds the little cluster and DCDC3 the big one. The vendor tables
+go up to 1.05 V for the top operating points, and the converters ramp at
+250 uV/us; without the ramp delay the clock is raised before the voltage
+has settled and the big cluster hangs at 2 GHz.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ .../dts/allwinner/sun60i-a733-cubie-a7a.dts   | 39 ++++++++++++++++++-
+ 1 file changed, 37 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/allwinner/sun60i-a733-cubie-a7a.dts b/arch/arm64/boot/dts/allwinner/sun60i-a733-cubie-a7a.dts
+index 3f3338bf793..a2498a477a8 100644
+--- a/arch/arm64/boot/dts/allwinner/sun60i-a733-cubie-a7a.dts
++++ b/arch/arm64/boot/dts/allwinner/sun60i-a733-cubie-a7a.dts
+@@ -3,6 +3,7 @@
+ /dts-v1/;
+ 
+ #include "sun60i-a733.dtsi"
++#include "sun60i-a733-cpu-opp.dtsi"
+ 
+ #include <dt-bindings/clock/sun60i-a733-serdes-ccu.h>
+ #include <dt-bindings/gpio/gpio.h>
+@@ -111,6 +112,38 @@ &ehci1 {
+ 	status = "okay";
+ };
+ 
++&cpu0 {
++	cpu-supply = <&reg_dcdc5>;
++};
++
++&cpu1 {
++	cpu-supply = <&reg_dcdc5>;
++};
++
++&cpu2 {
++	cpu-supply = <&reg_dcdc5>;
++};
++
++&cpu3 {
++	cpu-supply = <&reg_dcdc5>;
++};
++
++&cpu4 {
++	cpu-supply = <&reg_dcdc5>;
++};
++
++&cpu5 {
++	cpu-supply = <&reg_dcdc5>;
++};
++
++&cpu6 {
++	cpu-supply = <&reg_dcdc3>;
++};
++
++&cpu7 {
++	cpu-supply = <&reg_dcdc3>;
++};
++
+ &gmac0 {
+ 	/* No PHY driver, so the MAC adds the RGMII delays */
+ 	phy-mode = "rgmii";
+@@ -279,8 +312,9 @@ reg_dcdc2: dcdc2 {
+ 			reg_dcdc3: dcdc3 {
+ 				regulator-always-on;
+ 				regulator-min-microvolt = <800000>;
+-				regulator-max-microvolt = <1000000>;
++				regulator-max-microvolt = <1050000>;
+ 				regulator-name = "vdd-cpub";
++				regulator-ramp-delay = <250>;
+ 			};
+ 
+ 			reg_dcdc4: dcdc4 {
+@@ -295,8 +329,9 @@ reg_dcdc4: dcdc4 {
+ 			reg_dcdc5: dcdc5 {
+ 				regulator-always-on;
+ 				regulator-min-microvolt = <800000>;
+-				regulator-max-microvolt = <1000000>;
++				regulator-max-microvolt = <1050000>;
+ 				regulator-name = "vdd-cpul";
++				regulator-ramp-delay = <250>;
+ 			};
+ 
+ 			reg_dcdc6: dcdc6 {
+-- 
+2.30.2
+

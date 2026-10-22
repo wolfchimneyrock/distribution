@@ -1,0 +1,109 @@
+From feb092ee1805a75fc5bc560bf62ca2c8edd7b4c3 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Sat, 5 Sep 2026 01:16:42 +0200
+Subject: [PATCH 193/211] dt-bindings: display: sunxi: Add the A733 HDMI
+
+The controller is the same as on the H6 but is wired with four clocks and
+one reset rather than six and two, so it gets a compatible of its own
+rather than a fallback. The PHY takes a phandle to the system controller,
+which holds the transmit resistance calibration.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ .../display/allwinner,sun8i-a83t-dw-hdmi.yaml |  5 ++++
+ .../allwinner,sun8i-a83t-hdmi-phy.yaml        | 23 +++++++++++++++++++
+ .../allwinner,sun4i-a10-system-control.yaml   |  1 +
+ 3 files changed, 29 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/display/allwinner,sun8i-a83t-dw-hdmi.yaml b/Documentation/devicetree/bindings/display/allwinner,sun8i-a83t-dw-hdmi.yaml
+index 44cc5c2beb0..f2e4fbc8778 100644
+--- a/Documentation/devicetree/bindings/display/allwinner,sun8i-a83t-dw-hdmi.yaml
++++ b/Documentation/devicetree/bindings/display/allwinner,sun8i-a83t-dw-hdmi.yaml
+@@ -28,6 +28,8 @@ properties:
+       - const: allwinner,sun8i-a83t-dw-hdmi
+       - const: allwinner,sun50i-h6-dw-hdmi
+ 
++      - const: allwinner,sun60i-a733-dw-hdmi
++
+       - items:
+           - const: allwinner,sun50i-h616-dw-hdmi
+           - const: allwinner,sun50i-h6-dw-hdmi
+@@ -92,6 +94,9 @@ properties:
+     description:
+       The VCC power supply of the controller
+ 
++  power-domains:
++    maxItems: 1
++
+   ports:
+     $ref: /schemas/graph.yaml#/properties/ports
+ 
+diff --git a/Documentation/devicetree/bindings/display/allwinner,sun8i-a83t-hdmi-phy.yaml b/Documentation/devicetree/bindings/display/allwinner,sun8i-a83t-hdmi-phy.yaml
+index fc88c5e2a3f..ec06728e15b 100644
+--- a/Documentation/devicetree/bindings/display/allwinner,sun8i-a83t-hdmi-phy.yaml
++++ b/Documentation/devicetree/bindings/display/allwinner,sun8i-a83t-hdmi-phy.yaml
+@@ -22,6 +22,7 @@ properties:
+       - allwinner,sun50i-a64-hdmi-phy
+       - allwinner,sun50i-h6-hdmi-phy
+       - allwinner,sun50i-h616-hdmi-phy
++      - allwinner,sun60i-a733-hdmi-phy
+ 
+   reg:
+     maxItems: 1
+@@ -42,12 +43,21 @@ properties:
+       - const: pll-0
+       - const: pll-1
+ 
++  power-domains:
++    maxItems: 1
++
+   resets:
+     maxItems: 1
+ 
+   reset-names:
+     const: phy
+ 
++  syscon:
++    $ref: /schemas/types.yaml#/definitions/phandle
++    description:
++      Phandle to the system controller, which holds the transmit
++      resistance calibration.
++
+ required:
+   - compatible
+   - reg
+@@ -96,6 +106,19 @@ else:
+       clock-names:
+         maxItems: 2
+ 
++allOf:
++  - if:
++      properties:
++        compatible:
++          contains:
++            const: allwinner,sun60i-a733-hdmi-phy
++    then:
++      required:
++        - syscon
++    else:
++      properties:
++        syscon: false
++
+ additionalProperties: false
+ 
+ examples:
+diff --git a/Documentation/devicetree/bindings/sram/allwinner,sun4i-a10-system-control.yaml b/Documentation/devicetree/bindings/sram/allwinner,sun4i-a10-system-control.yaml
+index 6e6ab2168a2..1b6d27760a9 100644
+--- a/Documentation/devicetree/bindings/sram/allwinner,sun4i-a10-system-control.yaml
++++ b/Documentation/devicetree/bindings/sram/allwinner,sun4i-a10-system-control.yaml
+@@ -51,6 +51,7 @@ properties:
+               - allwinner,sun50i-a100-system-control
+               - allwinner,sun50i-h6-system-control
+               - allwinner,sun55i-a523-system-control
++              - allwinner,sun60i-a733-system-control
+           - const: allwinner,sun50i-a64-system-control
+ 
+   reg:
+-- 
+2.30.2
+

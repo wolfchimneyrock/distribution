@@ -1,0 +1,348 @@
+From 72e710f07cb81076c2ea896db806d7b9a98a72a6 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Fri, 4 Sep 2026 15:32:20 +0200
+Subject: [PATCH 180/211] drm/sun4i: de33: Describe the routing registers per
+ SoC
+
+The block that routes channels to displays and picks the writeback source
+grew on the A733: the writeback source moved into a register of its own,
+the video and interface channel muxes are now separate registers, and the
+per-display port muxes moved up. The old offsets land on the wrong
+registers there, so carry them per SoC instead of hard coding them.
+
+The writeback control bits moved with them. On the first DE33 one register
+holds the source, the start bit and the timing mode; on the A733 the
+control bits sit in their own register at different positions.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ drivers/clk/sunxi-ng/ccu-sun8i-de2.c  | 38 ++++++++++---
+ drivers/gpu/drm/sun4i/sun50i_planes.c | 33 +++++++++---
+ drivers/gpu/drm/sun4i/sun50i_planes.h | 20 ++++---
+ drivers/gpu/drm/sun4i/sun50i_wb.c     | 78 ++++++++++++++++++++++-----
+ 4 files changed, 137 insertions(+), 32 deletions(-)
+
+diff --git a/drivers/clk/sunxi-ng/ccu-sun8i-de2.c b/drivers/clk/sunxi-ng/ccu-sun8i-de2.c
+index 69d95f38e85..84871d25358 100644
+--- a/drivers/clk/sunxi-ng/ccu-sun8i-de2.c
++++ b/drivers/clk/sunxi-ng/ccu-sun8i-de2.c
+@@ -338,10 +338,17 @@ static const struct sunxi_ccu_desc sun50i_h616_de33_clk_desc = {
+ 
+ #define SUN50I_DE33_RTWB_MUX_REG 0x20
+ #define SUN50I_DE33_CHN2CORE_REG 0x24
+-#define SUN50I_DE33_PORT12CHN_REG 0x2c
++/*
++ * The routing block grew on later parts: the writeback source, the two
++ * channel muxes and the per-display port muxes each moved up a register.
++ */
++#define SUN50I_DE33_LAST_MUX_REG 0x34
++
++#define SUN60I_A733_DE_MBUS_REG		0x08
++#define SUN60I_A733_DE_MBUS_DEASSERT	BIT(4)
+ 
+ static const struct regmap_range sun8i_de2_ccu_regmap_accessible_ranges[] = {
+-	regmap_reg_range(SUN50I_DE33_RTWB_MUX_REG, SUN50I_DE33_PORT12CHN_REG),
++	regmap_reg_range(SUN50I_DE33_RTWB_MUX_REG, SUN50I_DE33_LAST_MUX_REG),
+ };
+ 
+ static const struct regmap_access_table sun8i_de2_ccu_regmap_accessible_table = {
+@@ -353,7 +360,7 @@ static const struct regmap_config sun8i_de2_ccu_regmap_config = {
+ 	.reg_bits	= 32,
+ 	.val_bits	= 32,
+ 	.reg_stride	= 4,
+-	.max_register	= SUN50I_DE33_PORT12CHN_REG,
++	.max_register	= SUN50I_DE33_LAST_MUX_REG,
+ 
+ 	/* other devices have no business accessing other registers */
+ 	.wr_table	= &sun8i_de2_ccu_regmap_accessible_table,
+@@ -412,10 +419,27 @@ static int sunxi_de2_clk_probe(struct platform_device *pdev)
+ 		goto err_disable_mod_clk;
+ 	}
+ 
+-	/*
+-	 * The DE33 requires these additional plane mapping registers set
+-	 * during initialisation.
+-	 */
++	if (of_device_is_compatible(pdev->dev.of_node,
++				    "allwinner,sun50i-h616-de33-clk")) {
++		/*
++		 * The DE33 requires these additional plane mapping registers
++		 * set during initialisation.
++		 */
++		writel(0, reg + SUN50I_DE33_CHN2CORE_REG);
++		writel(0x0000a980, reg + SUN50I_DE33_CHN2CORE_REG + 4);
++	}
++
++	if (of_device_is_compatible(pdev->dev.of_node,
++				    "allwinner,sun60i-a733-de33-clk")) {
++		/*
++		 * This generation holds the memory bus in reset until asked
++		 * otherwise, and the engine cannot reach memory until then.
++		 */
++		writel(readl(reg + SUN60I_A733_DE_MBUS_REG) |
++		       SUN60I_A733_DE_MBUS_DEASSERT,
++		       reg + SUN60I_A733_DE_MBUS_REG);
++	}
++
+ 	if (of_device_is_compatible(pdev->dev.of_node,
+ 				    "allwinner,sun50i-h616-de33-clk") ||
+ 	    of_device_is_compatible(pdev->dev.of_node,
+diff --git a/drivers/gpu/drm/sun4i/sun50i_planes.c b/drivers/gpu/drm/sun4i/sun50i_planes.c
+index 5a39e90fc82..749afdbad3c 100644
+--- a/drivers/gpu/drm/sun4i/sun50i_planes.c
++++ b/drivers/gpu/drm/sun4i/sun50i_planes.c
+@@ -29,6 +29,12 @@ static const struct sun50i_planes_quirks sun50i_h616_planes_quirks = {
+ 			.num_ch = 3,
+ 		},
+ 	},
++	.mux = {
++		.vi_chn		= 0x24,
++		.ui_chn		= 0x24,
++		.ui_chn_shift	= 16,
++		.port_chn	= 0x28,
++	},
+ 	.cfg = {
+ 		.de_type	= SUN8I_MIXER_DE33,
+ 		.afbc_mask	= BIT(0),
+@@ -58,6 +64,12 @@ static const struct sun50i_planes_quirks sun60i_a733_planes_quirks = {
+ 			.num_ch = 5,
+ 		},
+ 	},
++	.mux = {
++		.vi_chn		= 0x28,
++		.ui_chn		= 0x2c,
++		.ui_chn_shift	= 0,
++		.port_chn	= 0x30,
++	},
+ 	.cfg = {
+ 		.de_type	= SUN8I_MIXER_DE33,
+ 		.scaler_type    = {
+@@ -154,20 +166,28 @@ sun50i_planes_setup(struct device *dev, struct drm_device *drm,
+ static void sun50i_planes_init_mapping(struct sun50i_planes *planes)
+ {
+ 	const struct sun50i_planes_quirks *quirks = planes->quirks;
++	u32 mapping, vi_mapping, ui_mapping;
+ 	unsigned int i, j;
+-	u32 mapping;
+ 
+-	mapping = 0;
++	vi_mapping = 0;
++	ui_mapping = 0;
+ 	for (j = 0; j < MAX_DISP; j++)
+ 		for (i = 0; i < quirks->def_map[j].num_ch; i++) {
+ 			unsigned int ch = quirks->def_map[j].map[i];
+ 
+ 			if (ch < UI_PLANE_OFFSET)
+-				mapping |= j << (ch * 2);
++				vi_mapping |= j << (ch * 2);
+ 			else
+-				mapping |= j << ((ch - UI_PLANE_OFFSET) * 2 + 16);
++				ui_mapping |= j << ((ch - UI_PLANE_OFFSET) * 2 +
++						    quirks->mux.ui_chn_shift);
+ 		}
+-	regmap_write(planes->mapping, SUNXI_DE33_DE_CHN2CORE_MUX_REG, mapping);
++	if (quirks->mux.ui_chn == quirks->mux.vi_chn) {
++		regmap_write(planes->mapping, quirks->mux.vi_chn,
++			     vi_mapping | ui_mapping);
++	} else {
++		regmap_write(planes->mapping, quirks->mux.vi_chn, vi_mapping);
++		regmap_write(planes->mapping, quirks->mux.ui_chn, ui_mapping);
++	}
+ 
+ 	for (j = 0; j < MAX_DISP; j++) {
+ 		mapping = 0;
+@@ -179,7 +199,8 @@ static void sun50i_planes_init_mapping(struct sun50i_planes *planes)
+ 
+ 			mapping |= ch << (i * 4);
+ 		}
+-		regmap_write(planes->mapping, SUNXI_DE33_DE_PORT02CHN_MUX_REG + j * 4, mapping);
++		regmap_write(planes->mapping, quirks->mux.port_chn + j * 4,
++			     mapping);
+ 	}
+ }
+ 
+diff --git a/drivers/gpu/drm/sun4i/sun50i_planes.h b/drivers/gpu/drm/sun4i/sun50i_planes.h
+index 76c2f35e97e..b89b3de1a53 100644
+--- a/drivers/gpu/drm/sun4i/sun50i_planes.h
++++ b/drivers/gpu/drm/sun4i/sun50i_planes.h
+@@ -6,10 +6,17 @@
+ 
+ #include "sun8i_mixer.h"
+ 
+-/* mapping registers, located in clock register space */
+-#define SUNXI_DE33_DE_CHN2CORE_MUX_REG	0x24
+-#define SUNXI_DE33_DE_PORT02CHN_MUX_REG	0x28
+-#define SUNXI_DE33_DE_PORT12CHN_MUX_REG	0x2c
++/*
++ * Mapping registers, located in the clock register space. Later parts split
++ * the single channel mux into one register per channel kind and moved the
++ * per-display port muxes up, so the offsets are described per SoC.
++ */
++struct sun50i_planes_mux_regs {
++	unsigned int	vi_chn;		/* video channel to display mux */
++	unsigned int	ui_chn;		/* interface channel to display mux */
++	unsigned int	ui_chn_shift;	/* where the interface channels start */
++	unsigned int	port_chn;	/* first per-display port mux */
++};
+ 
+ #define MAX_DISP	2
+ #define UI_PLANE_OFFSET	6
+@@ -24,8 +31,9 @@ struct default_map {
+ };
+ 
+ struct sun50i_planes_quirks {
+-	struct default_map	def_map[MAX_DISP];
+-	struct sun8i_layer_cfg	cfg;
++	struct default_map		def_map[MAX_DISP];
++	struct sun50i_planes_mux_regs	mux;
++	struct sun8i_layer_cfg		cfg;
+ };
+ 
+ struct sun50i_planes {
+diff --git a/drivers/gpu/drm/sun4i/sun50i_wb.c b/drivers/gpu/drm/sun4i/sun50i_wb.c
+index 9e541cb87ae..ed1f235b431 100644
+--- a/drivers/gpu/drm/sun4i/sun50i_wb.c
++++ b/drivers/gpu/drm/sun4i/sun50i_wb.c
+@@ -105,12 +105,40 @@
+ #define WB_MIN_HEIGHT		4
+ #define WB_YUV_MAX_WIDTH	2048
+ 
+-#define DE33_RTWB_MUX		0x20
+-#define DE33_RTWB_FROM_DSC	BIT(0)
+-#define DE33_RTWB_START		BIT(4)
+-#define DE33_RTWB_SELF_TIMING	BIT(5)
+ #define DE33_WB_OFFSET		0x11000
+ 
++/*
++ * The routing block differs between DE33 generations. On the first one a
++ * single register carries the source, the start bit and the timing mode. On
++ * the A733 the source moved to a register of its own and the control bits
++ * changed position.
++ */
++struct sun50i_wb_rtwb {
++	unsigned int	ctl;		/* start and timing mode */
++	unsigned int	mux;		/* source select */
++	unsigned int	src_shift;
++	u32		start;
++	u32		self_timing;
++	u32		from_dsc;
++};
++
++static const struct sun50i_wb_rtwb sun50i_de33_rtwb = {
++	.ctl		= 0x20,
++	.mux		= 0x20,
++	.src_shift	= 1,
++	.start		= BIT(4),
++	.self_timing	= BIT(5),
++	.from_dsc	= BIT(0),
++};
++
++static const struct sun50i_wb_rtwb sun60i_a733_rtwb = {
++	.ctl		= 0x20,
++	.mux		= 0x24,
++	.src_shift	= 0,
++	.start		= BIT(0),
++	.self_timing	= BIT(4),
++};
++
+ #define WB_RCQ_STATUS		0x04
+ #define WB_RCQ_STATUS_FINISH	BIT(2)
+ #define WB_RCQ_STATUS_W1C	GENMASK(3, 2)
+@@ -127,6 +155,7 @@ struct sun50i_wb_cfg {
+ 	const u32 *formats;
+ 	unsigned int format_count;
+ 	unsigned int max_output_width;
++	const struct sun50i_wb_rtwb *rtwb;
+ 	bool has_rcq;
+ };
+ 
+@@ -194,6 +223,7 @@ static const struct sun50i_wb_cfg sun50i_h616_wb_cfg = {
+ 	.format_count = ARRAY_SIZE(sun50i_h616_wb_formats),
+ 	.max_output_width = WB_YUV_MAX_WIDTH,
+ 	.has_rcq = true,
++	.rtwb = &sun50i_de33_rtwb,
+ };
+ 
+ static const u32 sun50i_wb_coeff_up[] = {
+@@ -459,7 +489,7 @@ static irqreturn_t sun50i_wb_irq(int irq, void *data)
+ 
+ 	writel(WB_STATUS_W1C, wb->regs + WB_STATUS);
+ 	if (wb->cfg->has_rcq)
+-		regmap_write(wb->top, DE33_RTWB_MUX, wb->rtwb_mux);
++		regmap_write(wb->top, wb->cfg->rtwb->mux, wb->rtwb_mux);
+ 	writel(0, wb->regs + WB_INT);
+ 
+ 	/*
+@@ -570,12 +600,19 @@ static bool sun50i_wb_prepare_rtwb(struct sun50i_wb *wb,
+ 	unsigned int crtc_index = drm_crtc_index(crtc);
+ 	bool external_timing;
+ 
+-	wb->rtwb_mux = wb->crtc_port[crtc_index] * 2;
++	const struct sun50i_wb_rtwb *rtwb = wb->cfg->rtwb;
++
++	wb->rtwb_mux = wb->crtc_port[crtc_index] << rtwb->src_shift;
+ 	external_timing = sun50i_wb_has_external_timing(wb, crtc);
+-	if (!external_timing)
+-		wb->rtwb_mux |= DE33_RTWB_FROM_DSC |
+-				  DE33_RTWB_SELF_TIMING;
+-	regmap_write(wb->top, DE33_RTWB_MUX, wb->rtwb_mux);
++	if (rtwb->ctl == rtwb->mux) {
++		if (!external_timing)
++			wb->rtwb_mux |= rtwb->from_dsc | rtwb->self_timing;
++		regmap_write(wb->top, rtwb->mux, wb->rtwb_mux);
++	} else {
++		regmap_write(wb->top, rtwb->mux, wb->rtwb_mux);
++		regmap_write(wb->top, rtwb->ctl,
++			     external_timing ? 0 : rtwb->self_timing);
++	}
+ 
+ 	return external_timing;
+ }
+@@ -629,7 +666,7 @@ static void sun50i_wb_atomic_commit(struct drm_connector *conn,
+ 		writel(0, wb->regs + WB_INT);
+ 		writel(WB_STATUS_W1C, wb->regs + WB_STATUS);
+ 		if (wb->cfg->has_rcq)
+-			regmap_write(wb->top, DE33_RTWB_MUX, wb->rtwb_mux);
++			regmap_write(wb->top, wb->cfg->rtwb->mux, wb->rtwb_mux);
+ 		wb->self_timing_crtc = NULL;
+ 		if (wb->self_timing_commit) {
+ 			complete_all(&wb->self_timing_commit->flip_done);
+@@ -723,8 +760,14 @@ static void sun50i_wb_atomic_commit(struct drm_connector *conn,
+ 			drm_warn(conn->dev, "writeback RCQ sync timed out\n");
+ 		if (!external_timing)
+ 			sunxi_engine_commit(scrtc->engine, crtc, state);
+-		regmap_write(wb->top, DE33_RTWB_MUX,
+-			     wb->rtwb_mux | DE33_RTWB_START);
++		if (wb->cfg->rtwb->ctl == wb->cfg->rtwb->mux)
++			regmap_write(wb->top, wb->cfg->rtwb->mux,
++				     wb->rtwb_mux | wb->cfg->rtwb->start);
++		else
++			regmap_write(wb->top, wb->cfg->rtwb->ctl,
++				     (external_timing ? 0 :
++				      wb->cfg->rtwb->self_timing) |
++				     wb->cfg->rtwb->start);
+ 	} else {
+ 		writel(gctrl | WB_GCTRL_START, wb->regs + WB_GCTRL);
+ 	}
+@@ -928,9 +971,18 @@ static void sun50i_wb_remove(struct platform_device *pdev)
+ 	reset_control_assert(wb->reset);
+ }
+ 
++static const struct sun50i_wb_cfg sun60i_a733_wb_cfg = {
++	.formats = sun50i_h616_wb_formats,
++	.format_count = ARRAY_SIZE(sun50i_h616_wb_formats),
++	.max_output_width = WB_YUV_MAX_WIDTH,
++	.has_rcq = true,
++	.rtwb = &sun60i_a733_rtwb,
++};
++
+ static const struct of_device_id sun50i_wb_of_table[] = {
+ 	{ .compatible = "allwinner,sun50i-h6-de3-wb", .data = &sun50i_h6_wb_cfg },
+ 	{ .compatible = "allwinner,sun50i-h616-de33-wb", .data = &sun50i_h616_wb_cfg },
++	{ .compatible = "allwinner,sun60i-a733-de33-wb", .data = &sun60i_a733_wb_cfg },
+ 	{ }
+ };
+ MODULE_DEVICE_TABLE(of, sun50i_wb_of_table);
+-- 
+2.30.2
+

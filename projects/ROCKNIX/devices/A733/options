@@ -1,0 +1,87 @@
+################################################################################
+# setup device defaults
+################################################################################
+
+  # The TARGET_CPU variable controls which processor should be targeted for
+  # generated code.
+    case ${TARGET_ARCH} in
+      aarch64)
+        TARGET_CPU="cortex-a76.cortex-a55"
+        TARGET_CPU_FLAGS="+crc+crypto+rcpc+dotprod"
+        ;;
+      arm)
+        TARGET_KERNEL_ARCH="arm64"
+        TARGET_FLOAT="hard"
+        TARGET_CPU="cortex-a76.cortex-a55"
+        TARGET_CPU_FLAGS="+crc"
+        TARGET_FPU="crypto-neon-fp-armv8"
+        ;;
+    esac
+
+    PARTITION_TABLE="msdos"
+    HW_CPU="Allwinner A733"
+
+  # Kernel target
+    KERNEL_TARGET="Image"
+
+  # Kernel extra targets to build
+    KERNEL_MAKE_EXTRACMD=" $(get_kernel_make_extracmd)"
+
+  # Kernel cmdline
+    EXTRA_CMDLINE="quiet console=ttyS0,115200 console=tty0 systemd.debug_shell=ttyS0"
+
+  # Bootloader to use (syslinux / u-boot)
+    BOOTLOADER="u-boot"
+
+  # U-Boot firmware package(s) to use (BL31 is built into u-boot-sunxi-with-spl.bin)
+    UBOOT_FIRMWARE+=" atf"
+    ATF_PLATFORM="sun60i_a733"
+    ATF_BL31_BINARY="bl31.bin"
+
+  # Open PowerVR (drm/imagination + Mesa PowerVR Vulkan, GL via Zink)
+    GRAPHIC_DRIVERS="imagination"
+
+  # Zink needs desktop GL entry points
+    PREFER_GLES="no"
+
+  # Vulkan (Mesa PowerVR driver)
+    VULKAN_SUPPORT="yes"
+    VULKAN="vulkan-loader"
+
+  # Displayserver to use (wl / no)
+    DISPLAYSERVER="wl"
+
+  # Windowmanager to use (weston / swaywm-env / no)
+    WINDOWMANAGER="swaywm-env"
+
+  # Additional drivers to install:
+  # On-board Wi-Fi/BT (Radxa FCU760K) is an AIC8800D80 on USB.
+    ADDITIONAL_DRIVERS="aic8800"
+    AIC8800_TYPE="usb"
+
+  # Additional Firmware to use
+    FIRMWARE="powervr-firmware"
+
+  # Additional packages to install
+    ADDITIONAL_PACKAGES=""
+
+  # Board has no built-in controls
+    ROCKNIX_JOYPAD="no"
+
+  # Debug tty path
+    DEBUG_TTY="/dev/ttyS0"
+
+  # Build and install rocknix out-of-tree device trees and overlays (yes / no)
+    ROCKNIX_DEVICE_TREE_OVERLAYS="no"
+
+  # ZRAM Algorithm
+    ZRAM_COMPRESSION_ALGO="lz4"
+
+  # ZRAM Size
+    ZRAM_SWAP_SIZE="0"
+
+  # Disk Swap
+    SWAP_FILE_SIZE="0"
+
+  # Transparent Huge Pages compaction
+    THP_DEFRAG="defer"

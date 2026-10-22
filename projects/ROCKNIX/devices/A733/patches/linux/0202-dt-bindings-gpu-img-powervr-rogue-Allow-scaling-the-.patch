@@ -1,0 +1,39 @@
+From 69fc4350ae181a2838d560436127796d4b6a31e4 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Sat, 5 Sep 2026 06:22:15 +0200
+Subject: [PATCH 202/211] dt-bindings: gpu: img,powervr-rogue: Allow scaling
+ the core
+
+Describe the operating points table, the supply that moves with the core
+clock, and the cooling cells a thermal zone needs to throttle the GPU.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ .../devicetree/bindings/gpu/img,powervr-rogue.yaml    | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/gpu/img,powervr-rogue.yaml b/Documentation/devicetree/bindings/gpu/img,powervr-rogue.yaml
+index 3c658926300..37fd66525d2 100644
+--- a/Documentation/devicetree/bindings/gpu/img,powervr-rogue.yaml
++++ b/Documentation/devicetree/bindings/gpu/img,powervr-rogue.yaml
+@@ -88,6 +88,17 @@ properties:
+   resets:
+     maxItems: 1
+ 
++  power-supply:
++    description: Supply feeding the GPU core, scaled along with its clock.
++
++  operating-points-v2: true
++
++  opp-table:
++    type: object
++
++  "#cooling-cells":
++    const: 2
++
+ required:
+   - compatible
+   - reg
+-- 
+2.30.2
+

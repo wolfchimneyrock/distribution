@@ -1,0 +1,26 @@
+From d418e66b12309db749ca86197974ba35727bb9d5 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Fri, 4 Sep 2026 13:18:34 +0200
+Subject: [PATCH 174/211] arm64: dts: allwinner: a733: cubie-a7a: enable the
+ display engine
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ arch/arm64/boot/dts/allwinner/sun60i-a733-cubie-a7a.dts | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/allwinner/sun60i-a733-cubie-a7a.dts b/arch/arm64/boot/dts/allwinner/sun60i-a733-cubie-a7a.dts
+index a2498a477a8..74eb3f5d90f 100644
+--- a/arch/arm64/boot/dts/allwinner/sun60i-a733-cubie-a7a.dts
++++ b/arch/arm64/boot/dts/allwinner/sun60i-a733-cubie-a7a.dts
+@@ -590,3 +590,7 @@ &uart0 {
+ 	pinctrl-0 = <&uart0_pb9_pb10_pins>;
+ 	status = "okay";
+ };
++
++&de {
++	status = "okay";
++};
+-- 
+2.30.2
+

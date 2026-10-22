@@ -1,0 +1,43 @@
+From 70c45f6af3293b7e141b83aeadf4b4c6860ba04e Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Sat, 5 Sep 2026 00:43:15 +0200
+Subject: [PATCH 185/211] drm/sun4i: dw-hdmi: Add A733 support
+
+The controller is the same v2.12a as on the H6, so reuse its quirks.
+
+Also drop the encoder funcs left behind when this driver moved to a
+bridge; nothing has referenced them since.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ drivers/gpu/drm/sun4i/sun8i_dw_hdmi.c | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/gpu/drm/sun4i/sun8i_dw_hdmi.c b/drivers/gpu/drm/sun4i/sun8i_dw_hdmi.c
+index 249e9df8732..9243742bfae 100644
+--- a/drivers/gpu/drm/sun4i/sun8i_dw_hdmi.c
++++ b/drivers/gpu/drm/sun4i/sun8i_dw_hdmi.c
+@@ -138,9 +138,6 @@ sun8i_dw_hdmi_encoder_atomic_mode_set(struct drm_encoder *encoder,
+ 
+ 	clk_set_rate(hdmi->clk_tmds, rate);
+ }
+-static const struct drm_encoder_funcs sun8i_dw_hdmi_encoder_funcs = {
+-	.destroy = drm_encoder_cleanup,
+-};
+ 
+ static const struct drm_encoder_helper_funcs
+ sun8i_dw_hdmi_encoder_helper_funcs = {
+@@ -409,6 +406,10 @@ static const struct of_device_id sun8i_dw_hdmi_dt_ids[] = {
+ 		.compatible = "allwinner,sun50i-h6-dw-hdmi",
+ 		.data = &sun50i_h6_quirks,
+ 	},
++	{
++		.compatible = "allwinner,sun60i-a733-dw-hdmi",
++		.data = &sun50i_h6_quirks,
++	},
+ 	{ /* sentinel */ },
+ };
+ MODULE_DEVICE_TABLE(of, sun8i_dw_hdmi_dt_ids);
+-- 
+2.30.2
+

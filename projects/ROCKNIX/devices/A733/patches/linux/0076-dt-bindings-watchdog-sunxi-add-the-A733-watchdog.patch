@@ -1,0 +1,30 @@
+From 3a10bc8cdbb8312f772687d3092c0415cf0cf548 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Thu, 3 Sep 2026 15:33:24 +0200
+Subject: [PATCH 076/211] dt-bindings: watchdog: sunxi: add the A733 watchdog
+
+The A733 watchdog has the same registers as the A523 one, at the same
+offsets, so it uses that compatible as a fallback.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ .../devicetree/bindings/watchdog/allwinner,sun4i-a10-wdt.yaml  | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/watchdog/allwinner,sun4i-a10-wdt.yaml b/Documentation/devicetree/bindings/watchdog/allwinner,sun4i-a10-wdt.yaml
+index b35ac03d517..0744e005e97 100644
+--- a/Documentation/devicetree/bindings/watchdog/allwinner,sun4i-a10-wdt.yaml
++++ b/Documentation/devicetree/bindings/watchdog/allwinner,sun4i-a10-wdt.yaml
+@@ -33,6 +33,9 @@ properties:
+           - const: allwinner,sun20i-d1-wdt-reset
+           - const: allwinner,sun20i-d1-wdt
+       - const: allwinner,sun55i-a523-wdt
++      - items:
++          - const: allwinner,sun60i-a733-wdt
++          - const: allwinner,sun55i-a523-wdt
+ 
+   reg:
+     maxItems: 1
+-- 
+2.30.2
+

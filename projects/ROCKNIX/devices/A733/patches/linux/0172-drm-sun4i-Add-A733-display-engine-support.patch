@@ -1,0 +1,94 @@
+From 3c9d3380cc1140cd11471ecb933ca98e3d5d30e5 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Fri, 4 Sep 2026 13:18:34 +0200
+Subject: [PATCH 172/211] drm/sun4i: Add A733 display engine support
+
+The A733 carries a DE33 style engine with six channels feeding two
+displays. Give the first display five of them: channel zero sits behind an
+advanced scaler this driver cannot program yet, so leave it out until that
+scaler is understood, and hand over the five whose scalers are ordinary
+VSU8 ones.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ drivers/gpu/drm/sun4i/sun50i_planes.c | 30 +++++++++++++++++++++++++++
+ drivers/gpu/drm/sun4i/sun8i_mixer.c   | 10 +++++++++
+ 2 files changed, 40 insertions(+)
+
+diff --git a/drivers/gpu/drm/sun4i/sun50i_planes.c b/drivers/gpu/drm/sun4i/sun50i_planes.c
+index fd0bfa4cbf1..5a39e90fc82 100644
+--- a/drivers/gpu/drm/sun4i/sun50i_planes.c
++++ b/drivers/gpu/drm/sun4i/sun50i_planes.c
+@@ -46,11 +46,41 @@ static const struct sun50i_planes_quirks sun50i_h616_planes_quirks = {
+ 	},
+ };
+ 
++static const struct sun50i_planes_quirks sun60i_a733_planes_quirks = {
++	.def_map = {
++		{
++			/*
++			 * Channel 0 has an advanced scaler this driver cannot
++			 * program yet, so leave it out and give the display
++			 * the five channels whose scalers are understood.
++			 */
++			.map = {1, 2, 6, 7, 8},
++			.num_ch = 5,
++		},
++	},
++	.cfg = {
++		.de_type	= SUN8I_MIXER_DE33,
++		.scaler_type    = {
++			[1] = SUN8I_SCALER_VI_8,
++			[2] = SUN8I_SCALER_VI_8,
++			[6] = SUN8I_SCALER_VI_8,
++			[7] = SUN8I_SCALER_VI_8,
++			[8] = SUN8I_SCALER_VI_8,
++		},
++		.scanline_yuv	= {4096, 2048, 2048},
++		.scanline_rgb	= {4096, 2048, 2048, 0, 0, 0, 2048, 2048, 2048},
++	},
++};
++
+ static const struct of_device_id sun50i_planes_of_table[] = {
+ 	{
+ 		.compatible = "allwinner,sun50i-h616-de33-planes",
+ 		.data = &sun50i_h616_planes_quirks
+ 	},
++	{
++		.compatible = "allwinner,sun60i-a733-de33-planes",
++		.data = &sun60i_a733_planes_quirks
++	},
+ 	{ }
+ };
+ MODULE_DEVICE_TABLE(of, sun50i_planes_of_table);
+diff --git a/drivers/gpu/drm/sun4i/sun8i_mixer.c b/drivers/gpu/drm/sun4i/sun8i_mixer.c
+index 9159c44f6c3..a1ecdd49acf 100644
+--- a/drivers/gpu/drm/sun4i/sun8i_mixer.c
++++ b/drivers/gpu/drm/sun4i/sun8i_mixer.c
+@@ -1051,6 +1051,12 @@ static const struct sun8i_mixer_cfg sun50i_h616_mixer0_cfg = {
+ 	.has_formatter	= 1,
+ };
+ 
++static const struct sun8i_mixer_cfg sun60i_a733_mixer0_cfg = {
++	.de_type	= SUN8I_MIXER_DE33,
++	.mod_rate	= 600000000,
++	.has_formatter	= 1,
++};
++
+ static const struct of_device_id sun8i_mixer_of_table[] = {
+ 	{
+ 		.compatible = "allwinner,sun8i-a83t-de2-mixer-0",
+@@ -1100,6 +1106,10 @@ static const struct of_device_id sun8i_mixer_of_table[] = {
+ 		.compatible = "allwinner,sun50i-h616-de33-mixer-0",
+ 		.data = &sun50i_h616_mixer0_cfg,
+ 	},
++	{
++		.compatible = "allwinner,sun60i-a733-de33-mixer-0",
++		.data = &sun60i_a733_mixer0_cfg,
++	},
+ 	{ }
+ };
+ MODULE_DEVICE_TABLE(of, sun8i_mixer_of_table);
+-- 
+2.30.2
+

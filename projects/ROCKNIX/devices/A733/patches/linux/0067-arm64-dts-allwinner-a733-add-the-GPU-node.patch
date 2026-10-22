@@ -1,0 +1,44 @@
+From 3e90a59c94446e53dff05ab6a0fda2cd8b14fa13 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Thu, 3 Sep 2026 08:44:19 +0200
+Subject: [PATCH 067/211] arm64: dts: allwinner: a733: add the GPU node
+
+The A733 has an Imagination BXM-4-64 MC1 GPU behind two power domains: the
+top level one feeds the register block, the core one the shader cluster.
+The register block is on the GPU AHB bus, so the "sys" clock is the GPU bus
+gate, "mem" the MBUS gate and "core" the GPU clock itself.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ arch/arm64/boot/dts/allwinner/sun60i-a733.dtsi | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/allwinner/sun60i-a733.dtsi b/arch/arm64/boot/dts/allwinner/sun60i-a733.dtsi
+index bd3f5126bf3..411a34e9fc1 100644
+--- a/arch/arm64/boot/dts/allwinner/sun60i-a733.dtsi
++++ b/arch/arm64/boot/dts/allwinner/sun60i-a733.dtsi
+@@ -111,6 +111,21 @@ soc {
+ 		#size-cells = <1>;
+ 		ranges = <0x0 0x0 0x0 0x40000000>;
+ 
++		gpu: gpu@1800000 {
++			compatible = "allwinner,sun60i-a733-gpu", "img,img-bxm-4-64",
++				     "img,img-rogue";
++			reg = <0x01800000 0x90000>;
++			interrupts = <GIC_SPI 63 IRQ_TYPE_LEVEL_HIGH>;
++			clocks = <&ccu CLK_GPU0>,
++				 <&ccu CLK_MBUS_GPU0>,
++				 <&ccu CLK_BUS_GPU0>;
++			clock-names = "core", "mem", "sys";
++			power-domains = <&pck600 PD_GPU_TOP>, <&pck600 PD_GPU_CORE>;
++			power-domain-names = "a", "b";
++			resets = <&ccu RST_BUS_GPU0>;
++			status = "disabled";
++		};
++
+ 		pio: pinctrl@2000000 {
+ 			compatible = "allwinner,sun60i-a733-pinctrl";
+ 			reg = <0x02000000 0x600>;
+-- 
+2.30.2
+

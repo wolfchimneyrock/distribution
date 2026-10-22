@@ -1,0 +1,36 @@
+From 64923ad3505177c10011d2f945e3d3b205b0dce1 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@gmail.com>
+Date: Thu, 3 Sep 2026 15:33:24 +0200
+Subject: [PATCH 077/211] arm64: dts: allwinner: a733: add the watchdog
+
+It is what resets the system, from the firmware and from U-Boot alike, so
+it has to be in the tree that U-Boot shares with the kernel.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+---
+ arch/arm64/boot/dts/allwinner/sun60i-a733.dtsi | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/allwinner/sun60i-a733.dtsi b/arch/arm64/boot/dts/allwinner/sun60i-a733.dtsi
+index 0b0e6d1e6cb..b498441ed7f 100644
+--- a/arch/arm64/boot/dts/allwinner/sun60i-a733.dtsi
++++ b/arch/arm64/boot/dts/allwinner/sun60i-a733.dtsi
+@@ -188,6 +188,15 @@ ccu: clock-controller@2002000 {
+ 			#reset-cells = <1>;
+ 		};
+ 
++		wdt: watchdog@2050000 {
++			compatible = "allwinner,sun60i-a733-wdt",
++				     "allwinner,sun55i-a523-wdt";
++			reg = <0x2050000 0x20>;
++			interrupts = <GIC_SPI 106 IRQ_TYPE_LEVEL_HIGH>;
++			clocks = <&osc26M>, <&rtc CLK_OSC32K>;
++			clock-names = "hosc", "losc";
++		};
++
+ 		uart0: serial@2500000 {
+ 			compatible = "snps,dw-apb-uart";
+ 			reg = <0x02500000 0x400>;
+-- 
+2.30.2
+
