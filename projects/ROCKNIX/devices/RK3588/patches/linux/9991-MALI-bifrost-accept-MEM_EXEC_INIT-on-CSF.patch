@@ -1,0 +1,37 @@
+From: wolfchimneyrock <12381503+wolfchimneyrock@users.noreply.github.com>
+Subject: [PATCH] MALI: bifrost: accept MEM_EXEC_INIT when the CSF EXEC_VA zone exists
+
+CSF contexts get their EXEC_VA zone at creation (kbase_reg_zone_exec_va_init),
+so KBASE_IOCTL_MEM_EXEC_INIT always returned -EPERM. libmali g29p1-11eac1
+still issues it and treats -EPERM as fatal (vkCreateDevice / EGL init fail).
+Accept a request that fits in the existing zone.
+
+---
+--- a/drivers/gpu/arm/bifrost/mali_kbase_reg_track.c
++++ b/drivers/gpu/arm/bifrost/mali_kbase_reg_track.c
+@@ -1243,6 +1243,25 @@
+ 	 * EXEC_VA zone must come before JIT's CUSTOM_VA.
+ 	 */
+ 	if (kbase_has_exec_va_zone_locked(kctx) || kctx->jit_va) {
++#if MALI_USE_CSF
++		/* CSF contexts are created with their EXEC_VA zone already in place
++		 * (kbase_reg_zone_exec_va_init). libmali g29p1-11eac1 still asks for it
++		 * with MEM_EXEC_INIT and treats -EPERM as fatal: accept a request that
++		 * fits in the existing zone instead of refusing it.
++		 */
++		if (!kctx->jit_va) {
++			struct kbase_reg_zone *zone = kbase_ctx_reg_zone_get(kctx, EXEC_VA_ZONE);
++
++			if (exec_va_pages <= zone->va_size_pages) {
++				dev_info(kctx->kbdev->dev,
++					 "MEM_EXEC_INIT: EXEC_VA zone already set up (%llu pages), request for %llu accepted\n",
++					 (unsigned long long)zone->va_size_pages,
++					 (unsigned long long)exec_va_pages);
++				err = 0;
++				goto exit_unlock;
++			}
++		}
++#endif
+ 		err = -EPERM;
+ 		goto exit_unlock;
+ 	}
