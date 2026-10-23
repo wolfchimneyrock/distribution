@@ -10,7 +10,7 @@ PKG_TOOLCHAIN="meson"
 PKG_PATCH_DIRS+="${DEVICE}"
 
 case ${DEVICE} in
-  RK3588)
+  RK3588|RK3576)
     PKG_VERSION="1.9"
     PKG_URL="https://github.com/swaywm/sway/archive/${PKG_VERSION}.zip"
     ;;
@@ -59,7 +59,7 @@ post_makeinstall_target() {
   safe_remove ${INSTALL}/usr/share/wayland-sessions
 
   case ${DEVICE} in
-    RK3588)
+    RK3588|RK3576)
       sed -i '/allow_tearing/d' ${INSTALL}/usr/lib/autostart/common/111-sway-init
       ;;
   esac

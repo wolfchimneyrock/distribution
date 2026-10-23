@@ -9,13 +9,13 @@ PKG_LONGDESC="A modular Wayland compositor library"
 PKG_TOOLCHAIN="meson"
 
 case ${DEVICE} in
-  RK3326|RK3566|RK3576|S922X)
+  RK3326|RK3566|S922X)
     # wlroots 0.19.3 with libmali hacks
     PKG_VERSION="132e31cfe19f51b478301aa5aab1e6c4be3f8874"
     PKG_SHA256="96aa6240e72b8ff4dc9943fc5b080e264a5fbf8b94fe8da10e1d6befa552b8fc"
     PKG_URL="https://github.com/rocknix/rockchip-wlroots/archive/${PKG_VERSION}.tar.gz"
     ;;
-  RK3588)
+  RK3588|RK3576)
     PKG_VERSION="0.17.4-rk"
     PKG_SHA256="e9e1e14966c6272ca595307fa817fd0fefae96b13fe36c8084b3a7a55fed20d1"
     PKG_URL="https://github.com/rocknix/rockchip-wlroots/archive/refs/tags/${PKG_VERSION}.tar.gz"
