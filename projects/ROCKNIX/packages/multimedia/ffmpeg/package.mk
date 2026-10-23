@@ -28,7 +28,7 @@ get_graphicdrivers
 PKG_FFMPEG_HWACCEL="--enable-hwaccels"
 
 case ${DEVICE} in
-  RK3588*)
+  RK3588*|RK3576*)
     V4L2_SUPPORT=no
     PKG_DEPENDS_TARGET+=" rkmpp libdrm"
     PKG_NEED_UNPACK+=" $(get_pkg_directory libdrm)"

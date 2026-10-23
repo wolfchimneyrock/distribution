@@ -363,7 +363,8 @@ make_target() {
           ;;
       esac
 
-      [[ "${DEVICE}" != "RK3588" ]] && export BUILD_BPF_SKEL=0
+      # 6.1 vendor kernels: perf errors out if BUILD_BPF_SKEL is defined at all (even 0)
+      [[ ! "${DEVICE}" =~ ^(RK3588|RK3576)$ ]] && export BUILD_BPF_SKEL=0
 
       WERROR=0 \
       NO_LIBPERL=1 \
