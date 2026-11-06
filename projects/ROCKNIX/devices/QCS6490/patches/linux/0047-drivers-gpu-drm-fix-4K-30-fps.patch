@@ -1,0 +1,49 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Nascs Fang <nascs@radxa.com>
+Date: Wed, 6 Aug 2025 14:59:43 +0800
+Subject: drivers: gpu: drm: fix 4K 30 fps
+
+Signed-off-by: Nascs Fang <nascs@radxa.com>
+
+[ROCKNIX QCS6490: rebased onto 7.2.15; the mode_valid check moved and uses drm_mode_vrefresh() inline]
+---
+diff --git a/drivers/gpu/drm/msm/disp/dpu1/catalog/dpu_7_2_sc7280.h b/drivers/gpu/drm/msm/disp/dpu1/catalog/dpu_7_2_sc7280.h
+index 99b8a890f..874f5f6e4 100644
+--- a/drivers/gpu/drm/msm/disp/dpu1/catalog/dpu_7_2_sc7280.h
++++ b/drivers/gpu/drm/msm/disp/dpu1/catalog/dpu_7_2_sc7280.h
+@@ -243,7 +243,6 @@ const struct dpu_mdss_cfg dpu_sc7280_cfg = {
+ 	.mdss_ver = &sc7280_mdss_ver,
+ 	.caps = &sc7280_dpu_caps,
+ 	.mdp = &sc7280_mdp,
+-	.cdm = &dpu_cdm_5_x,
+ 	.ctl_count = ARRAY_SIZE(sc7280_ctl),
+ 	.ctl = sc7280_ctl,
+ 	.sspp_count = ARRAY_SIZE(sc7280_sspp),
+diff --git a/drivers/gpu/drm/msm/dp/dp_display.c b/drivers/gpu/drm/msm/dp/dp_display.c
+index 22eade11c..1763568c4 100644
+--- a/drivers/gpu/drm/msm/dp/dp_display.c
++++ b/drivers/gpu/drm/msm/dp/dp_display.c
+@@ -741,6 +741,10 @@ enum drm_mode_status msm_dp_bridge_mode_valid(struct drm_bridge *bridge,
+ 	if (mode_rate_khz > supported_rate_khz)
+ 		return MODE_BAD;
+ 
++	/* Dragon Q6A (RA620 DP-to-HDMI): above 3440x1440 the link only carries 30 Hz */
++	if (mode->hdisplay * mode->vdisplay > 3440 * 1440 && drm_mode_vrefresh(mode) > 30)
++		return MODE_BAD;
++
+ 	return MODE_OK;
+ }
+ 
+diff --git a/drivers/gpu/drm/msm/dp/dp_panel.c b/drivers/gpu/drm/msm/dp/dp_panel.c
+index 5b4954e7c..198ce5609 100644
+--- a/drivers/gpu/drm/msm/dp/dp_panel.c
++++ b/drivers/gpu/drm/msm/dp/dp_panel.c
+@@ -215,7 +215,7 @@ static u32 msm_dp_panel_get_supported_bpp(struct msm_dp_panel *msm_dp_panel,
+ 		u32 mode_edid_bpp, u32 mode_pclk_khz)
+ {
+ 	const struct msm_dp_link_info *link_info;
+-	const u32 max_supported_bpp = 30, min_supported_bpp = 18;
++	const u32 max_supported_bpp = 30, min_supported_bpp = 24;
+ 	u32 bpp, data_rate_khz;
+ 
+ 	bpp = min(mode_edid_bpp, max_supported_bpp);

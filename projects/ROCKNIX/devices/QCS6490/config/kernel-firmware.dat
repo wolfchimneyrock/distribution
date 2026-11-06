@@ -1,0 +1,20 @@
+# DRM_MSM (Adreno 643)
+qcom/a660_gmu.bin
+qcom/a660_sqe.fw
+qcom/qcs6490/a660_zap.mbn
+
+# QCOM_GENI_SE
+qcom/qcm6490/qupv3fw.elf
+
+# Remoteprocs (paths requested by the mainline Dragon Q6A DTS)
+qcom/qcs6490/cdsp.mbn
+qcom/qcs6490/cdspr.jsn
+qcom/qcs6490/radxa/dragon-q6a/adsp.mbn
+qcom/qcs6490/radxa/dragon-q6a/adspr.jsn
+qcom/qcs6490/radxa/dragon-q6a/adspua.jsn
+qcom/qcs6490/radxa/dragon-q6a/cdsp.mbn
+qcom/qcs6490/radxa/dragon-q6a/cdspr.jsn
+
+# AudioReach topology
+qcom/qcs6490/QCS6490-Radxa-Dragon-Q6A-tplg.bin
+qcom/qcs6490/radxa/dragon-q6a/QCS6490-Radxa-Dragon-Q6A-tplg.bin

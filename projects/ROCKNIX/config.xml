@@ -43,6 +43,9 @@
         <file>sun50i-h700-anbernic-rg-sp</file>
     </DDR3>
   </H700>
+  <QCS6490 mkimage_options="grub,dtb" dtb_prefix="qcom">
+    <file>qcs6490-radxa-dragon-q6a</file>
+  </QCS6490>
   <RK3326 dtb_prefix="rockchip">
     <!-- NOTE: DO NOT ADD ANY NEW RK3326 IMAGES -->
     <!-- see projects/ROCKNIX/devices/RK3326/packages/u-boot/package.mk, function generate_custom_extlinux_conf_files -->

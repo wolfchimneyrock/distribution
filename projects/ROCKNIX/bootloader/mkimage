@@ -73,7 +73,7 @@ mkimage_dtb() {
       mcopy "${RELEASE_DIR}/3rdparty/bootloader/stock" ::
       mcopy "${RELEASE_DIR}/3rdparty/bootloader/overlays" ::
       ;;
-    SDM845|SM4450|SM6115|SM8250|SM8550|SM8650|SM8750)
+    QCS6490|SDM845|SM4450|SM6115|SM8250|SM8550|SM8650|SM8750)
       mcopy -s -o "${RELEASE_DIR}/3rdparty/bootloader/dtbs" ::
       ;;
     S922X)
@@ -93,6 +93,11 @@ mkimage_dtb() {
 mkimage_bls() {
   echo "image: copying bls bootloader configuration..."
   mcopy -s -o "${RELEASE_DIR}/3rdparty/bootloader/loader" ::
+}
+
+mkimage_grub() {
+  echo "image: copying grub (EFI/BOOT)..."
+  mcopy -s -o "${RELEASE_DIR}/3rdparty/bootloader/EFI" ::
 }
 
 mkimage_abl() {

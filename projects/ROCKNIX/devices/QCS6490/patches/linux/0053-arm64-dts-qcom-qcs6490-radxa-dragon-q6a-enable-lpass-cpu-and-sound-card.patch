@@ -1,0 +1,32 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: suckbluefrog <suckbluefrog@proton.me>
+Date: Wed, 22 Apr 2026 18:48:00 +0300
+Subject: [PATCH] arm64: dts: qcom: qcs6490-radxa-dragon-q6a: enable lpass cpu
+ and sound card
+
+The Dragon Q6A DTS already describes the onboard audio routes, codecs, and
+DSP-backed DAIs, but the top-level LPASS CPU DAI node and the sound card are
+left disabled. Enable those two nodes now that DSP firmware is staged again.
+---
+ arch/arm64/boot/dts/qcom/qcs6490-radxa-dragon-q6a.dts | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/qcs6490-radxa-dragon-q6a.dts b/arch/arm64/boot/dts/qcom/qcs6490-radxa-dragon-q6a.dts
+index 0f17fd0b4b92..6be0ab5df77c 100644
+--- a/arch/arm64/boot/dts/qcom/qcs6490-radxa-dragon-q6a.dts
++++ b/arch/arm64/boot/dts/qcom/qcs6490-radxa-dragon-q6a.dts
+@@ -1022,4 +1022,8 @@ &sdhc_2 {
+ 	cd-gpios = <&tlmm 91 GPIO_ACTIVE_LOW>;
+ };
+ 
++&lpass_cpu {
++	status = "okay";
++};
++
+ &sound {
+@@ -1026,2 +1030,3 @@ &sound {
++	status = "okay";
+ 	compatible = "qcom,qcs6490-rb3gen2-sndcard";
+ 	model = "QCS6490-Radxa-Dragon-Q6A";
+-- 
+2.49.0

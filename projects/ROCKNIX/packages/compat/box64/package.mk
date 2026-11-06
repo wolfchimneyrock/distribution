@@ -26,7 +26,7 @@ case ${DEVICE} in
   SM4450)
     PKG_CMAKE_OPTS_TARGET+=" -DSD888=On"
     ;;
-  SM8250)
+  SM8250|QCS6490)
     PKG_CMAKE_OPTS_TARGET+=" -DSD865=On"
     ;;
   SDM845)

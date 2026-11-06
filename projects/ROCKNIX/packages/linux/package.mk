@@ -32,6 +32,12 @@ case ${DEVICE} in
     PKG_URL="https://www.kernel.org/pub/linux/kernel/v${PKG_VERSION/.*/}.x/${PKG_NAME}-${PKG_VERSION}.tar.xz"
     PKG_PATCH_DIRS+=" 7.2.6"
     ;;
+  QCS6490)
+    PKG_VERSION="7.2.15"
+    PKG_SHA256="d0f6b1d7324c937ccaeb5c4ca7084bfcf71db2edb3e2d3a31f0ad83a681809ab"
+    PKG_URL="https://www.kernel.org/pub/linux/kernel/v${PKG_VERSION/.*/}.x/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+    PKG_PATCH_DIRS+=" 7.2.6"
+    ;;
   S922X)
     PKG_VERSION="7.3.1"
     PKG_SHA256="fa595aad93734f829c963c2a90ef7c3673224fd7fdae7b49406e397cde2de231"
@@ -86,7 +92,7 @@ done
 
 if [ "${DEVICE}" = "RK3326" -o "${DEVICE}" = "RK3566" ]; then
   PKG_DEPENDS_UNPACK+=" generic-dsi"
-elif [ "${DEVICE}" = "SM8250" -o "${DEVICE}" = "H700" -o "${DEVICE}" = "SM8650" -o "${DEVICE}" = "SM8750" -o "${DEVICE}" = "SDM845" ]; then
+elif [ "${DEVICE}" = "SM8250" -o "${DEVICE}" = "H700" -o "${DEVICE}" = "SM8650" -o "${DEVICE}" = "SM8750" -o "${DEVICE}" = "SDM845" -o "${DEVICE}" = "QCS6490" ]; then
   PKG_DEPENDS_UNPACK+=" kernel-firmware"
 fi
 
@@ -235,6 +241,25 @@ pre_make_target() {
       cp -Lv $(get_build_dir kernel-firmware)/.copied-firmware/qcom/sdm845/modem.mbn ${PKG_BUILD}/external-firmware/qcom/sdm845
       cp -Lv $(get_build_dir kernel-firmware)/.copied-firmware/qcom/sdm845/adsp.mbn ${PKG_BUILD}/external-firmware/qcom/sdm845
       cp -Lv $(get_build_dir kernel-firmware)/.copied-firmware/qcom/sdm845/cdsp.mbn ${PKG_BUILD}/external-firmware/qcom/sdm845
+
+    FW_LIST="$(find ${PKG_BUILD}/external-firmware -type f | sed 's|.*external-firmware/||' | sort | xargs)"
+
+    ${PKG_BUILD}/scripts/config --set-str CONFIG_EXTRA_FIRMWARE "${FW_LIST}"
+    ${PKG_BUILD}/scripts/config --set-str CONFIG_EXTRA_FIRMWARE_DIR "external-firmware"
+  elif [ "${TARGET_ARCH}" = "aarch64" -a "${DEVICE}" = "QCS6490" ]; then
+    # GPU, QUP and remoteprocs are built in and probe before the rootfs is up
+    mkdir -p ${PKG_BUILD}/external-firmware/qcom/qcm6490
+    mkdir -p ${PKG_BUILD}/external-firmware/qcom/qcs6490/radxa/dragon-q6a
+      cp -Lv $(get_build_dir kernel-firmware)/.copied-firmware/qcom/a660_gmu.bin ${PKG_BUILD}/external-firmware/qcom
+      cp -Lv $(get_build_dir kernel-firmware)/.copied-firmware/qcom/a660_sqe.fw ${PKG_BUILD}/external-firmware/qcom
+      cp -Lv $(get_build_dir kernel-firmware)/.copied-firmware/qcom/qcm6490/qupv3fw.elf ${PKG_BUILD}/external-firmware/qcom/qcm6490
+      cp -Lv $(get_build_dir kernel-firmware)/.copied-firmware/qcom/qcs6490/a660_zap.mbn ${PKG_BUILD}/external-firmware/qcom/qcs6490
+      cp -Lv $(get_build_dir kernel-firmware)/.copied-firmware/qcom/qcs6490/cdsp.mbn ${PKG_BUILD}/external-firmware/qcom/qcs6490
+      cp -Lv $(get_build_dir kernel-firmware)/.copied-firmware/qcom/qcs6490/cdspr.jsn ${PKG_BUILD}/external-firmware/qcom/qcs6490
+      cp -Lv $(get_build_dir kernel-firmware)/.copied-firmware/qcom/qcs6490/QCS6490-Radxa-Dragon-Q6A-tplg.bin ${PKG_BUILD}/external-firmware/qcom/qcs6490
+    for fw in adsp.mbn adspr.jsn adspua.jsn cdsp.mbn cdspr.jsn QCS6490-Radxa-Dragon-Q6A-tplg.bin; do
+      cp -Lv $(get_build_dir kernel-firmware)/.copied-firmware/qcom/qcs6490/radxa/dragon-q6a/${fw} ${PKG_BUILD}/external-firmware/qcom/qcs6490/radxa/dragon-q6a
+    done
 
     FW_LIST="$(find ${PKG_BUILD}/external-firmware -type f | sed 's|.*external-firmware/||' | sort | xargs)"
 

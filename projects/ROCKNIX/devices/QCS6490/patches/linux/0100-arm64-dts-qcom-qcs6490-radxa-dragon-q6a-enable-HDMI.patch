@@ -1,0 +1,149 @@
+From: wolfchimneyrock <12381503+wolfchimneyrock@users.noreply.github.com>
+Subject: [PATCH] arm64: dts: qcom: qcs6490-radxa-dragon-q6a: enable HDMI output and DP audio
+
+Mainline's Dragon Q6A board file (7.2, still in master) leaves the display
+off. Port the DP -> RA620 -> HDMI chain from Radxa's downstream board file
+(as carried by Batocera / suckbluefrog's ROCKNIX-QCS6490): the RA620
+bridge and HDMI connector, MDSS + DP, USB1 in host mode with its QMP
+combo PHY feeding the bridge, the HPD pin, and the DP0 playback link.
+
+---
+diff --git a/arch/arm64/boot/dts/qcom/qcs6490-radxa-dragon-q6a.dts b/arch/arm64/boot/dts/qcom/qcs6490-radxa-dragon-q6a.dts
+index 537462c81..bb7b610e4 100644
+--- a/arch/arm64/boot/dts/qcom/qcs6490-radxa-dragon-q6a.dts
++++ b/arch/arm64/boot/dts/qcom/qcs6490-radxa-dragon-q6a.dts
+@@ -74,10 +74,47 @@ wcd938x: audio-codec {
+ 		#sound-dai-cells = <1>;
+ 	};
+ 
++	bridge {
++		compatible = "radxa,ra620";
++
++		ports {
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			port@0 {
++				reg = <0>;
++
++				hdmi_bridge_in: endpoint {
++					remote-endpoint = <&usb_dp_qmpphy_out>;
++				};
++			};
++
++			port@1 {
++				reg = <1>;
++
++				hdmi_bridge_out: endpoint {
++					remote-endpoint = <&hdmi_connector_in>;
++				};
++			};
++		};
++	};
++
+ 	chosen {
+ 		stdout-path = "serial0:115200n8";
+ 	};
+ 
++	hdmi-connector {
++		compatible = "hdmi-connector";
++		label = "hdmi";
++		type = "a";
++
++		port {
++			hdmi_connector_in: endpoint {
++				remote-endpoint = <&hdmi_bridge_out>;
++			};
++		};
++	};
++
+ 	usb2_1_con: connector-0 {
+ 		compatible = "usb-a-connector";
+ 		vbus-supply = <&vcc_5v_peri>;
+@@ -521,6 +558,23 @@ &lpass_va_macro {
+ 	status = "okay";
+ };
+ 
++&mdss {
++	status = "okay";
++};
++
++&mdss_dp {
++	sound-name-prefix = "Display Port0";
++	pinctrl-0 = <&dp_hot_plug_det>;
++	pinctrl-names = "default";
++
++	status = "okay";
++};
++
++&mdss_dp_out {
++	data-lanes = <0 1>;
++	remote-endpoint = <&usb_dp_qmpphy_dp_in>;
++};
++
+ &pcie0 {
+ 	perst-gpios = <&tlmm 87 GPIO_ACTIVE_LOW>;
+ 	wake-gpios = <&tlmm 89 GPIO_ACTIVE_HIGH>;
+@@ -774,6 +828,22 @@ platform {
+ 			sound-dai = <&q6apm>;
+ 		};
+ 	};
++
++	dp0-dai-link {
++		link-name = "DP0 Playback";
++
++		cpu {
++			sound-dai = <&q6apmbedai DISPLAY_PORT_RX_0>;
++		};
++
++		codec {
++			sound-dai = <&mdss_dp>;
++		};
++
++		platform {
++			sound-dai = <&q6apm>;
++		};
++	};
+ };
+ 
+ /* Pin 11, 29, 31, 32 in GPIO header */
+@@ -964,6 +1034,31 @@ &uart5 {
+ 	status = "okay";
+ };
+ 
++&usb_1 {
++	dr_mode = "host";
++
++	status = "okay";
++};
++
++&usb_1_hsphy {
++	vdda-pll-supply = <&vreg_l10c_0p88>;
++	vdda33-supply = <&vreg_l2b_3p072>;
++	vdda18-supply = <&vreg_l1c_1p8>;
++
++	status = "okay";
++};
++
++&usb_1_qmpphy {
++	vdda-phy-supply = <&vreg_l6b_1p2>;
++	vdda-pll-supply = <&vreg_l1b_0p912>;
++
++	status = "okay";
++};
++
++&usb_dp_qmpphy_out {
++	remote-endpoint = <&hdmi_bridge_in>;
++};
++
+ &usb_2 {
+ 	dr_mode = "host";
+ 
+@@ -1098,3 +1193,7 @@ &sdc2_data {
+ 	bias-pull-up;
+ 	drive-strength = <10>;
+ };
++
++&dp_hot_plug_det {
++	bias-disable;
++};
